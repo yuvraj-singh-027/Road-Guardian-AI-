@@ -125,7 +125,8 @@ while True:
     # DISPLAY
     cv2.imshow("Pothole Detection", results[0].plot())
 
-    if cv2.waitKey(1) == 27:
+    key = cv2.waitKey(1) & 0xFF
+    if key in (27, 13, 10):
         break
 
 cap.release()
