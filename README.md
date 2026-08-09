@@ -1,48 +1,56 @@
-# Road-Guardian-AI--Intelligent-Road-Damage-Detection-System.
+# 🛡️ Road Guardian AI: Real-Time Road Health & Traffic Digital Twin
 
-Intelligent Road Maintenance & Pothole Detection System
-Road Guardian AI is an end-to-end computer vision solution designed to automate road hazard detection. Built for the India AI Impact Buildathon, it transforms standard mobile camera feeds into smart sensors that detect, locate, and log potholes in real-time.
+> **An Autonomous AI-Powered Infrastructure Surveillance & Predictive Traffic Intelligence System**
 
-📖 Table of Contents
-Project Motivation
+---
 
-Core Features
+## 📌 Executive Overview
 
-System Architecture
+**Road Guardian AI** transforms urban road management from reactive manual inspection into proactive predictive intelligence. The system combines **AI Vision Perception (YOLOv8)** with a **Multi-Factor Risk Engine (0-100 Score)**, a **3D Digital Twin City Network Map**, and a **Predictive Traffic Rerouting Simulator** to detect hazards, evaluate real-world risk, and prevent citywide traffic gridlock during road repairs.
 
-Tech Stack
+---
 
-Installation & Setup
+## 🏗️ 4-Pillar System Architecture
 
-Data Logging Format
+1. **Perception Engine (`dash.py`, `ROAD.py`)**: Real-time YOLO object detection for potholes, cracks, and surface damage with automatic EXIF GPS logging.
+2. **Context Engine (`risk_engine.py`)**: Multi-factor **0–100 Road Risk Score** evaluating Perception Damage (35%), Vehicle Speed (20%), Traffic Volume (15%), Road Category (10%), Weather Hazards (10%), and School/Hospital Proximity (10%).
+3. **Digital Twin Map (`traffic_engine.py`)**: WebGL 3D spatial map categorizing road segments into 🟢 Healthy (0-25), 🟡 Degraded (26-50), 🟠 High Risk (51-75), and 🔴 Critical (76-100).
+4. **Traffic Intelligence Simulator (`traffic_engine.py`)**: Predicts traffic flow shifts across alternate routes when a road segment is closed for maintenance (e.g., *"Closing Road A increases traffic on Road B by +46.8%"*).
 
-Future Enhancements
+---
 
-💡 Project Motivation
-Manual road inspection is inefficient and reactive. Road Guardian AI empowers municipal authorities with:
+## 📁 Clean Refined Directory Structure
 
-Cost-effective monitoring using existing mobile hardware.
+```
+c:\Users\keshawa kumar\TEMP\Road-Guardian-AI-\
+├── dash.py                                  # Main Streamlit Web Application
+├── risk_engine.py                           # Layer 2 Risk Score Engine
+├── traffic_engine.py                        # Layer 3 & 4 Digital Twin & Traffic Simulator
+├── report_generator.py                      # Municipal PDF Report Generator
+├── create_idea_submission_pdf.py            # Idea Submission PDF Script
+├── ROAD.py                                  # Live Camera YOLO Detection Script
+├── train.py                                 # Dynamic YOLO Model Trainer
+├── pothole_data.csv                         # Structured Detection Log CSV
+├── logo.png                                 # Application Branding Logo
+├── Road_Guardian_AI_Idea_Submission.pdf     # Official Idea Submission PDF Proposal
+└── runs/                                    # Trained Model Weights & Metrics
+```
 
-Precise data for prioritized road repairs based on severity.
+---
 
-Increased safety for two-wheelers and night-time commuters.
+## 🚀 Quickstart Guide
 
-✨ Core Features
-🎯 High-Precision Detection: Utilizes a fine-tuned YOLO model for identifying potholes in various lighting conditions.
+### 1. Install Dependencies
+```bash
+pip install streamlit pandas pydeck ultralytics opencv-python pillow fpdf2 geocoder
+```
 
-📍 Geotagging: Syncs with GPS modules to record the exact Latitude and Longitude of every hazard.
+### 2. Run Dashboard Application
+```bash
+streamlit run dash.py
+```
 
-📸 Visual Evidence: Automatically captures and stores frames of detected potholes for secondary verification.
-
-📊 Automated Reporting: Generates structured CSV logs using Pandas for seamless data analysis.
-
-🏗️ System Architecture
-The workflow follows a 4-step real-time pipeline:
-
-Inference: Live video stream is fed into the YOLO model via OpenCV.
-
-Filtering: Detections are filtered based on a confidence threshold (e.g., > 0.5).
-
-Data Retrieval: The system fetches current GPS Coordinates and Timestamp.
-
-Storage: Information is appended to a local database using Pandas.
+### 3. Run Live Camera Stream Script
+```bash
+python ROAD.py
+```
