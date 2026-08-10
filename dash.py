@@ -308,7 +308,7 @@ RUNS_DIR = os.path.join(BASE_DIR, "runs", "detect", "train2")
 MODEL_PATH = os.path.join(RUNS_DIR, "weights", "best.pt")
 LOGO_PATH = os.path.join(BASE_DIR, "logo.png")
 
-# --- BRANDING LOGO EMBLEM RENDERER (NO TEAM NAME) ---
+# --- BRANDING LOGO EMBLEM RENDERER ---
 def render_team_symbol(symbol_type="AI Shield Emblem", size=48):
     if symbol_type == "Neural Network Emblem":
         return f"""
@@ -461,13 +461,187 @@ def load_yolo_model():
 
 yolo_model = load_yolo_model()
 
+# --- HELPER: PROCESS & STORE UPLOADED / CAPTURED IMAGE ---
+def process_and_store_image(image_input, source_name="upload"):
+    Path(POTHOLES_FOLDER).mkdir(parents=True, exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    fname = f"{source_name}_{ts}.jpg"
+    out_p = os.path.join(POTHOLES_FOLDER, fname)
+
+    pil_img = Image.open(image_input).convert("RGB")
+    import numpy as np
+    img_np = np.array(pil_img)
+    img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+
+    # Try EXIF GPS extraction
+    lat, lon = extract_gps_from_exif(image_input)
+    if not lat or not lon:
+        lat, lon = get_default_gps()
+
+    sev = "Low"
+    conf = 0.0
+    annotated_np = img_np.copy()
+
+    if yolo_model is not None:
+        try:
+            # 100% Pure PyTorch YOLO Model Evaluation (best.pt)
+            results = yolo_model.predict(img_bgr, imgsz=416, conf=0.15, verbose=False)
+            if results and len(results[0].boxes) > 0:
+                confs = [float(b.conf[0]) for b in results[0].boxes]
+                conf = float(max(confs))
+                sev = "High" if conf > 0.70 else ("Medium" if conf > 0.40 else "Low")
+                
+                # Render PyTorch YOLO bounding boxes & labels
+                plot_bgr = results[0].plot(line_width=3, font_size=12)
+                annotated_np = cv2.cvtColor(plot_bgr, cv2.COLOR_BGR2RGB)
+        except Exception as e:
+            st.error(f"PyTorch YOLO evaluation error: {e}")
+
+    saved_img = Image.fromarray(annotated_np)
+    saved_img.save(out_p, format="JPEG", quality=95)
+
+    import csv
+    header_needed = not os.path.exists(CSV_FILE) or os.path.getsize(CSV_FILE) == 0
+    with open(CSV_FILE, "a", newline="") as f:
+        w = csv.writer(f)
+        if header_needed:
+            w.writerow(["Image", "Latitude", "Longitude", "Severity", "Confidence", "Time"])
+        w.writerow([fname, str(lat), str(lon), sev, round(conf, 2), datetime.datetime.now().isoformat()])
+
+    load_data.clear()
+    r_info = calculate_road_risk(severity=sev, confidence=conf)
+    return fname, saved_img, sev, conf, r_info
+
+# --- HELPER: PROCESS & STORE VIDEO FILE VIA PYTORCH YOLO ---
+def process_and_store_video(video_file):
+    import tempfile
+    
+    tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+    tfile.write(video_file.read())
+    tfile.close()
+
+    cap = cv2.VideoCapture(tfile.name)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 100
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480
+
+    v_fname = f"video_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
+    out_video_path = os.path.join(POTHOLES_FOLDER, v_fname)
+
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(out_video_path, fourcc, fps, (w, h))
+
+    progress_bar = st.progress(0.0)
+    status_text = st.empty()
+
+    frame_count = 0
+    detections_found = 0
+    max_conf = 0.0
+    key_frame_saved = None
+
+    def_lat, def_lon = get_default_gps()
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        frame_count += 1
+        annotated_frame = frame
+
+        if yolo_model is not None and frame_count % 2 == 0:
+            results = yolo_model.predict(frame, imgsz=416, conf=0.15, verbose=False)
+            if results and len(results[0].boxes) > 0:
+                annotated_frame = results[0].plot(line_width=3)
+                confs = [float(b.conf[0]) for b in results[0].boxes]
+                frame_max_conf = max(confs)
+                if frame_max_conf > max_conf:
+                    max_conf = frame_max_conf
+                    key_frame_saved = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                detections_found += len(results[0].boxes)
+
+        out.write(annotated_frame)
+        if total_frames > 0:
+            progress_bar.progress(min(1.0, frame_count / float(total_frames)))
+        status_text.text(f"Processing Video Frame {frame_count}/{total_frames} — Detections: {detections_found}")
+
+    cap.release()
+    out.release()
+    try:
+        os.unlink(tfile.name)
+    except Exception:
+        pass
+    progress_bar.empty()
+    status_text.empty()
+
+    sev = "High" if max_conf > 0.70 else ("Medium" if max_conf > 0.40 else "Low")
+
+    if key_frame_saved is not None:
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        kf_fname = f"video_frame_{ts}.jpg"
+        kf_path = os.path.join(POTHOLES_FOLDER, kf_fname)
+        Image.fromarray(key_frame_saved).save(kf_path, format="JPEG", quality=95)
+
+        import csv
+        header_needed = not os.path.exists(CSV_FILE) or os.path.getsize(CSV_FILE) == 0
+        with open(CSV_FILE, "a", newline="") as f:
+            w_csv = csv.writer(f)
+            if header_needed:
+                w_csv.writerow(["Image", "Latitude", "Longitude", "Severity", "Confidence", "Time"])
+            w_csv.writerow([kf_fname, str(def_lat), str(def_lon), sev, round(max_conf, 2), datetime.datetime.now().isoformat()])
+        load_data.clear()
+
+    return out_video_path, total_frames, detections_found, max_conf, sev, key_frame_saved
+
+# --- HELPER: RENDER STORED HAZARD IMAGES GALLERY ---
+def render_stored_images_gallery(df):
+    st.subheader("Stored Hazard Image Gallery")
+    if not os.path.exists(POTHOLES_FOLDER):
+        st.info("No stored images folder found yet.")
+        return
+        
+    all_files = [f for f in os.listdir(POTHOLES_FOLDER) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    if not all_files:
+        st.info("No detection images stored in dataset yet. Upload an image or capture a photo to store images.")
+        return
+
+    st.write(f"Showing **{len(all_files)}** stored hazard detection images:")
+    
+    cols = st.columns(3)
+    for idx, fname in enumerate(reversed(all_files)):
+        col = cols[idx % 3]
+        img_path = os.path.join(POTHOLES_FOLDER, fname)
+        
+        meta = {}
+        if not df.empty and 'Image' in df.columns:
+            match_rows = df[df['Image'] == fname]
+            if not match_rows.empty:
+                meta = match_rows.iloc[0].to_dict()
+                
+        sev = meta.get('Severity', 'Medium')
+        risk = meta.get('Risk_Score', 'N/A')
+        conf = meta.get('Confidence', 'N/A')
+        time_str = meta.get('Time', 'N/A')
+        
+        with col:
+            try:
+                st.image(img_path, use_container_width=True)
+                st.caption(f"**File:** `{fname}`")
+                st.caption(f"**Severity:** {sev} | **Risk Score:** {risk}/100")
+                if conf != 'N/A' and pd.notnull(conf):
+                    st.caption(f"**Confidence:** {float(conf)*100:.1f}%")
+                st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
+            except Exception as e:
+                st.error(f"Error displaying {fname}: {e}")
+
 # --- NAVIGATION PAGES LIST ---
 pages_list = [
     "Overview",
     "Road Risk Evaluator",
     "Digital Twin Map",
     "Traffic Simulator",
-    "Live AI Perception",
+    "AI Vision Perception",
     "Municipal Audit & PDF",
     "Data & Settings"
 ]
@@ -534,7 +708,7 @@ else: # Top Navigation Mode
     )
 
 # ==========================================
-# PAGE 1: OVERVIEW (FIRST VIEW WITH BRIEF EXECUTIVE EXPLANATION)
+# PAGE 1: OVERVIEW
 # ==========================================
 if page == "Overview":
     st.markdown("""
@@ -817,110 +991,68 @@ elif page == "Traffic Simulator":
     st.dataframe(clean_table, use_container_width=True)
 
 # ==========================================
-# PAGE 5: LIVE AI PERCEPTION
+# PAGE 5: AI VISION PERCEPTION
 # ==========================================
-elif page == "Live AI Perception":
+elif page == "AI Vision Perception":
     st.markdown("""
         <div class="gr-card">
-            <div class="gr-title">Live AI Camera Stream & Photo Capture</div>
+            <div class="gr-title">AI Vision Perception & Detection</div>
             <div class="gr-subtitle">
-                Run live webcam feed with real-time YOLO AI pothole detection overlay or capture photos on demand.
+                Upload road images or video files, or capture photos to evaluate potholes with PyTorch YOLO computer vision, log GPS metadata, and inspect the stored gallery.
             </div>
         </div>
     """, unsafe_allow_html=True)
 
-    if "camera_active" not in st.session_state:
-        st.session_state.camera_active = False
-
-    cam_tab1, cam_tab2 = st.tabs(["Live Webcam Stream", "Snapshot Upload / Capture"])
+    cam_tab1, cam_tab2, cam_tab3 = st.tabs([
+        "Upload & Process Image",
+        "Upload & Process Video",
+        "Stored Detections Gallery"
+    ])
 
     with cam_tab1:
-        st.markdown('<div class="cam-box">', unsafe_allow_html=True)
-        st.write("### Camera Status Control")
+        st.subheader("Upload Image File or Capture Snapshot")
+        st.write("Upload a road image from your device or take a snapshot to detect and store hazard logs.")
         
-        col_c_btn1, col_c_btn2 = st.columns(2)
-        with col_c_btn1:
-            if st.button("Start Camera Stream", type="primary", use_container_width=True):
-                st.session_state.camera_active = True
-        with col_c_btn2:
-            if st.button("Stop Camera Stream", use_container_width=True):
-                st.session_state.camera_active = False
-
-        if st.session_state.camera_active:
-            st.success("Camera Feed Active: Running YOLO detection...")
-        else:
-            st.info("Camera Feed is Inactive. Click 'Start Camera Stream' above to initiate detection.")
+        col_up1, col_up2 = st.columns(2)
         
-        st.markdown('</div>', unsafe_allow_html=True)
+        with col_up1:
+            st.markdown("#### Upload File from Device")
+            uploaded_file = st.file_uploader("Choose a road image file (JPG / PNG)", type=["jpg", "jpeg", "png"], key="file_up_widget")
+            if uploaded_file is not None:
+                st.image(uploaded_file, caption="Preview Uploaded File", use_container_width=True)
+                if st.button("Process & Save Uploaded Image", type="primary", key="btn_proc_file"):
+                    fname, saved_img, sev, conf, r_info = process_and_store_image(uploaded_file, source_name="upload")
+                    st.image(saved_img, caption=f"YOLO Detected: {fname}", use_container_width=True)
+                    st.success(f"Image `{fname}` processed and stored in dataset! Severity: **{sev}** | Road Risk Score: **{r_info['score']}/100** ({r_info['badge']})")
 
-        if st.session_state.camera_active:
-            frame_window = st.image([])
-            cap = cv2.VideoCapture(0)
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-            while cap.isOpened() and st.session_state.camera_active:
-                ret, frame = cap.read()
-                if not ret:
-                    st.error("Unable to read from camera device.")
-                    st.session_state.camera_active = False
-                    break
-
-                if yolo_model is not None:
-                    results = yolo_model.predict(frame, imgsz=416, conf=0.5, verbose=False)
-                    annotated_frame = results[0].plot()
-                    annotated_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                    frame_window.image(annotated_frame, use_container_width=True)
-                else:
-                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    frame_window.image(frame_rgb, use_container_width=True)
-
-                time.sleep(0.03)
-
-            cap.release()
+        with col_up2:
+            st.markdown("#### Capture Snapshot via Camera")
+            cam_photo = st.camera_input("Take a photo of the road", key="cam_input_widget")
+            if cam_photo is not None:
+                if st.button("Process & Save Snapshot Photo", type="primary", key="btn_proc_cam"):
+                    fname, saved_img, sev, conf, r_info = process_and_store_image(cam_photo, source_name="camera")
+                    st.image(saved_img, caption=f"YOLO Detected: {fname}", use_container_width=True)
+                    st.success(f"Snapshot `{fname}` processed and stored in dataset! Severity: **{sev}** | Road Risk Score: **{r_info['score']}/100** ({r_info['badge']})")
 
     with cam_tab2:
-        st.subheader("Capture Snapshot from Camera")
-        cam_photo = st.camera_input("Take a photo of the road")
-        if cam_photo is not None:
-            pil_img = Image.open(cam_photo).convert("RGB")
-            st.image(pil_img, caption="Captured Frame", use_container_width=True)
+        st.subheader("Upload & Evaluate Video Feed")
+        st.write("Upload a road surveillance video file (MP4 / AVI / MOV) to run PyTorch YOLO frame-by-frame hazard detection.")
+        
+        uploaded_video = st.file_uploader("Choose a road video file (MP4 / AVI / MOV)", type=["mp4", "avi", "mov", "m4v"], key="video_up_widget")
+        if uploaded_video is not None:
+            st.video(uploaded_video)
+            if st.button("Run PyTorch YOLO Video Detection", type="primary", key="btn_proc_video"):
+                with st.spinner("Processing video frames with PyTorch YOLO model..."):
+                    v_out, total_f, det_cnt, m_conf, sev, key_frame = process_and_store_video(uploaded_video)
+                
+                st.success(f"Video evaluation complete! Processed **{total_f}** frames — Detected **{det_cnt}** hazard instances. Max Confidence: **{int(m_conf*100)}%**")
+                
+                if key_frame is not None:
+                    st.subheader("Key Hazard Detection Frame")
+                    st.image(key_frame, caption="Highest Confidence Hazard Frame", use_container_width=True)
 
-            if st.button("Analyze & Log Captured Photo", type="primary"):
-                Path(POTHOLES_FOLDER).mkdir(parents=True, exist_ok=True)
-                ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                fname = f"camera_{ts}.jpg"
-                out_p = os.path.join(POTHOLES_FOLDER, fname)
-
-                sev = "Medium"
-                conf = 0.80
-                saved_img = pil_img
-
-                if yolo_model is not None:
-                    try:
-                        results = yolo_model.predict(pil_img, imgsz=416, conf=0.5, verbose=False)
-                        if results and len(results[0].boxes) > 0:
-                            confs = [float(b.conf[0]) for b in results[0].boxes]
-                            conf = max(confs)
-                            sev = "High" if conf > 0.75 else ("Medium" if conf > 0.5 else "Low")
-                            saved_img = Image.fromarray(results[0].plot()[..., ::-1])
-                    except Exception as e:
-                        st.error(f"YOLO error: {e}")
-
-                saved_img.save(out_p, format="JPEG", quality=92)
-                def_lat, def_lon = get_default_gps()
-
-                import csv
-                header_needed = not os.path.exists(CSV_FILE) or os.path.getsize(CSV_FILE) == 0
-                with open(CSV_FILE, "a", newline="") as f:
-                    w = csv.writer(f)
-                    if header_needed:
-                        w.writerow(["Image", "Latitude", "Longitude", "Severity", "Confidence", "Time"])
-                    w.writerow([fname, str(def_lat), str(def_lon), sev, round(conf, 2), datetime.datetime.now().isoformat()])
-
-                load_data.clear()
-                r_info = calculate_road_risk(severity=sev, confidence=conf)
-                st.success(f"Logged {fname} | Severity: {sev} | Road Risk Score: {r_info['score']}/100 ({r_info['badge']})")
+    with cam_tab3:
+        render_stored_images_gallery(load_data())
 
 # ==========================================
 # PAGE 6: MUNICIPAL AUDIT & PDF
@@ -1019,12 +1151,16 @@ elif page == "Data & Settings":
 
     st.markdown("---")
 
-    if not df.empty:
-        st.subheader("Detection Dataset")
-        exp_df = df.drop(columns=['lat_numeric', 'lon_numeric'], errors='ignore')
+    current_df = load_data()
+    if not current_df.empty:
+        st.subheader("Detection Dataset Table")
+        exp_df = current_df.drop(columns=['lat_numeric', 'lon_numeric'], errors='ignore')
         st.dataframe(exp_df, use_container_width=True)
         csv_data = exp_df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Detection Log CSV", data=csv_data, file_name='pothole_data.csv', mime='text/csv')
+
+    st.markdown("---")
+    render_stored_images_gallery(load_data())
 
     st.markdown("---")
     st.subheader("Clear / Reset Data Option")
