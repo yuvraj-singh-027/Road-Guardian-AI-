@@ -538,20 +538,11 @@ else: # Top Navigation Mode
 # ==========================================
 if page == "Overview":
     st.markdown("""
-        <div class="gr-card">
+        <div class="gr-card" style="padding: 20px 24px;">
             <div class="gr-title">Road Guardian AI</div>
-            <div class="gr-subtitle">Real-Time Road Health & Traffic Digital Twin</div>
-            <p style="color:#e5e7eb; font-size:1.05rem; line-height:1.65; margin-bottom:14px;">
-                <b>Road Guardian AI</b> is an autonomous infrastructure surveillance and predictive traffic intelligence system. It transforms municipal road management from reactive repairs into proactive predictive maintenance by combining real-time computer vision with contextual risk analytics and a 3D city Digital Twin.
-            </p>
-            <div style="background: rgba(0, 230, 180, 0.06); border: 1px solid rgba(0, 230, 180, 0.2); border-radius: 12px; padding: 16px 20px; margin-top: 10px;">
-                <div style="font-size: 0.95rem; font-weight: 700; color: #00e6b4; margin-bottom: 8px;">How Road Guardian AI Works:</div>
-                <ul style="color: #9ca3af; font-size: 0.92rem; margin: 0; padding-left: 20px; line-height: 1.65;">
-                    <li><b>Detects Surface Hazards:</b> Leverages custom YOLOv8 computer vision to identify potholes and road defects from live camera feeds or photo uploads with EXIF GPS geotagging.</li>
-                    <li><b>Computes Contextual Risk (0–100):</b> Evaluates dynamic hazard scores by weighting defect severity against vehicle speed, traffic density, weather hazards, and school/hospital proximity.</li>
-                    <li><b>Maps 3D Digital Twin:</b> Visualizes live citywide road health across WebGL 3D paths categorized into Healthy (0–25), Degraded (26–50), High Risk (51–75), and Critical (76–100) segments.</li>
-                    <li><b>Simulates Traffic Rerouting:</b> Predicts road closure impacts during maintenance and forecasts exact percentage traffic volume shifts on surrounding detour routes.</li>
-                </ul>
+            <div class="gr-subtitle" style="margin-bottom: 12px;">Real-Time Road Health & Traffic Digital Twin</div>
+            <div style="font-size: 1.02rem; color: #00e6b4; font-weight: 600; background: rgba(0, 230, 180, 0.08); border: 1px solid rgba(0, 230, 180, 0.25); border-radius: 10px; padding: 12px 18px;">
+                Detect Road Hazards &nbsp;&bull;&nbsp; Evaluate Risk Score &nbsp;&bull;&nbsp; Map Digital Twin &nbsp;&bull;&nbsp; Simulate Traffic Rerouting
             </div>
         </div>
     """, unsafe_allow_html=True)
