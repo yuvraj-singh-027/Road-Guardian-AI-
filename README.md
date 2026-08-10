@@ -23,16 +23,14 @@
 
 ```
 c:\Users\keshawa kumar\TEMP\Road-Guardian-AI-\
-├── dash.py                                  # Main Streamlit Web Application
+├── dash.py                                  # Main Streamlit Web Application (Top Executive Nav & Digital Twin)
 ├── risk_engine.py                           # Layer 2 Risk Score Engine
 ├── traffic_engine.py                        # Layer 3 & 4 Digital Twin & Traffic Simulator
 ├── report_generator.py                      # Municipal PDF Report Generator
-├── create_idea_submission_pdf.py            # Idea Submission PDF Script
 ├── ROAD.py                                  # Live Camera YOLO Detection Script
 ├── train.py                                 # Dynamic YOLO Model Trainer
 ├── pothole_data.csv                         # Structured Detection Log CSV
 ├── logo.png                                 # Application Branding Logo
-├── Road_Guardian_AI_Idea_Submission.pdf     # Official Idea Submission PDF Proposal
 └── runs/                                    # Trained Model Weights & Metrics
 ```
 
