@@ -1,0 +1,13 @@
+streamlit
+opencv-python-headless
+ultralytics
+pillow
+pandas
+numpy
+pydeck
+geocoder
+reportlab
+fpdf2
+pymysql
+requests
+nicegui
