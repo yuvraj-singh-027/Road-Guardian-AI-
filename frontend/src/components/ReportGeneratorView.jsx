@@ -6,55 +6,70 @@ export default function ReportGeneratorView() {
 
   const handleDownloadPDF = async () => {
     setIsGenerating(true);
-    try {
-      const response = await fetch('/api/report/pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          detections_summary: {
-            total_scanned: 142,
-            total_potholes: 39,
-            critical_count: 8,
-            high_count: 14,
-            average_risk_score: 68.4
-          },
-          critical_segments: [
-            {
-              name: 'Northern Arterial Road (Road A)',
-              potholes: 8,
-              risk_score: 88.5,
-              status: 'Critical',
-              traffic_density: 'High',
-              action_required: 'Immediate Emergency Repair & Traffic Diversion'
-            },
-            {
-              name: 'Cross Connector (Road C)',
-              potholes: 5,
-              risk_score: 72.1,
-              status: 'High Risk',
-              traffic_density: 'Moderate',
-              action_required: 'Scheduled Patching & Resurfacing'
-            }
-          ]
-        })
-      });
+    const payload = {
+      detections_summary: {
+        total_scanned: 142,
+        total_potholes: 39,
+        critical_count: 8,
+        high_count: 14,
+        average_risk_score: 68.4
+      },
+      critical_segments: [
+        {
+          name: 'Northern Arterial Road (Road A)',
+          potholes: 8,
+          risk_score: 88.5,
+          status: 'Critical',
+          traffic_density: 'High',
+          action_required: 'Immediate Emergency Repair & Traffic Diversion'
+        },
+        {
+          name: 'Cross Connector (Road C)',
+          potholes: 5,
+          risk_score: 72.1,
+          status: 'High Risk',
+          traffic_density: 'Moderate',
+          action_required: 'Scheduled Patching & Resurfacing'
+        }
+      ]
+    };
 
-      if (!response.ok) {
+    try {
+      let response;
+      try {
+        response = await fetch('/api/report/pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch (err) {
+        response = await fetch('http://localhost:8000/api/report/pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      if (!response || !response.ok) {
         throw new Error('PDF Generation Failed');
       }
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const rawBlob = await response.blob();
+      const pdfBlob = new Blob([rawBlob], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(pdfBlob);
       const a = document.createElement('a');
+      a.style.display = 'none';
       a.href = url;
       a.download = `Road_Guardian_Municipal_Audit_${Date.now()}.pdf`;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }, 100);
     } catch (err) {
       console.error(err);
-      alert('Failed to generate PDF report from FastAPI backend.');
+      alert('Failed to generate PDF report. Please ensure FastAPI backend is running at http://localhost:8000');
     } finally {
       setIsGenerating(false);
     }

@@ -61,10 +61,10 @@ def generate_pdf_report(
     pdf.ln(3)
 
     pdf.set_font("Helvetica", "", 9.5)
-    total_det = detections_summary.get("total", 0)
-    high_sev = detections_summary.get("high_severity", 0)
-    avg_risk = detections_summary.get("avg_risk", 0.0)
-    crit_count = detections_summary.get("critical_count", 0)
+    total_det = detections_summary.get("total", detections_summary.get("total_scanned", detections_summary.get("total_potholes", 0)))
+    high_sev = detections_summary.get("high_severity", detections_summary.get("high_count", 0))
+    avg_risk = detections_summary.get("avg_risk", detections_summary.get("average_risk_score", 0.0))
+    crit_count = detections_summary.get("critical_count", detections_summary.get("critical_potholes", 0))
 
     pdf.cell(95, 6, f"- Total Damage Detections: {total_det}", ln=False)
     pdf.cell(95, 6, f"- High Severity Hazards: {high_sev}", ln=True)
