@@ -458,14 +458,20 @@ def get_default_city_network(center_lat: float = 28.6139, center_lon: float = 77
     return processed_network
 
 
-def simulate_traffic_rerouting(closed_road_id: str, network: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+def simulate_traffic_rerouting(network: Any = None, closed_road_id: str = "Road_A") -> Dict[str, Any]:
     """
     Layer 4 — Traffic Intelligence Simulator
     Simulates closing a specified road segment for repair and predicts traffic flow shifts
     (% volume changes) across connected alternate routes.
     """
-    if network is None:
+    if isinstance(network, str):
+        network, closed_road_id = closed_road_id, network
+
+    if not network or not isinstance(network, list):
         network = get_default_city_network()
+
+    if not isinstance(closed_road_id, str):
+        closed_road_id = "Road_A"
 
     closed_seg = next((s for s in network if s["id"] == closed_road_id), None)
     if not closed_seg:

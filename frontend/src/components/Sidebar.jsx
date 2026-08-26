@@ -1,49 +1,63 @@
 import React from 'react';
-import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, RefreshCw, Lock, Users } from 'lucide-react';
+import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, RefreshCw, Lock, Users, ChevronRight, Layers } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPortal }) {
   const allNavItems = [
-    { id: 'detection', label: 'AI Hazard Perception', icon: Camera, publicAccess: true },
-    { id: 'digital-twin', label: 'Digital Twin City Map', icon: Map, publicAccess: true },
-    { id: 'traffic-reroute', label: 'Traffic Simulator', icon: Cpu, publicAccess: false },
-    { id: 'risk-calculator', label: 'Risk Engine Evaluator', icon: ShieldAlert, publicAccess: false },
-    { id: 'municipal-report', label: 'Audit PDF Generator', icon: FileText, publicAccess: false },
+    { id: 'detection', label: 'AI Hazard Perception', icon: Camera, publicAccess: true, badge: 'YOLOv8' },
+    { id: 'digital-twin', label: 'Digital Twin City Map', icon: Map, publicAccess: true, badge: '3D GIS' },
+    { id: 'traffic-reroute', label: 'Traffic Simulator', icon: Cpu, publicAccess: false, badge: 'Layer 4' },
+    { id: 'risk-calculator', label: 'Risk Engine Evaluator', icon: ShieldAlert, publicAccess: false, badge: 'Layer 2' },
+    { id: 'municipal-report', label: 'Audit PDF Generator', icon: FileText, publicAccess: false, badge: 'Export' },
   ];
 
-  // Filter items based on user role
   const navItems = userRole === 'public' 
     ? allNavItems.filter(item => item.publicAccess)
     : allNavItems;
 
   return (
-    <div className="sidebar">
+    <aside className="sidebar">
       <div>
+        {/* Brand Header */}
         <div className="brand-header">
-          <div className="brand-icon pulse-glow">
-            <Activity size={24} color="#00E6B4" />
+          <div className="brand-icon">
+            <Activity size={22} color="#00E6B4" />
           </div>
           <div>
             <div className="brand-title">Road Guardian</div>
-            <div className="brand-subtitle">AI Twin System</div>
+            <div className="brand-subtitle">AI Twin Intelligence</div>
           </div>
         </div>
 
-        {/* User Role Badge in Sidebar */}
-        <div className="sidebar-role-box">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {userRole === 'admin' ? <ShieldAlert size={16} color="#FFB703" /> : <Users size={16} color="#00E6B4" />}
-            <div>
-              <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: userRole === 'admin' ? '#FFB703' : '#00E6B4' }}>
-                {userRole === 'admin' ? 'Authority Admin' : 'Public Citizen'}
-              </div>
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                {userRole === 'admin' ? 'Full Control Access' : 'Public Portal View'}
+        {/* User Role Pill Box */}
+        <div className="sidebar-role-box" style={{ marginTop: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {userRole === 'admin' ? <ShieldAlert size={16} color="#F59E0B" /> : <Users size={16} color="#00E6B4" />}
+              <div>
+                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: userRole === 'admin' ? '#F59E0B' : '#00E6B4' }}>
+                  {userRole === 'admin' ? 'Authority Admin' : 'Public Citizen'}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#71717a' }}>
+                  {userRole === 'admin' ? 'Full Audit Access' : 'Public Telemetry'}
+                </div>
               </div>
             </div>
+            <button 
+              onClick={onSwitchPortal}
+              style={{ background: 'transparent', border: 'none', color: '#71717a', cursor: 'pointer', padding: '4px' }}
+              title="Switch Access Portal"
+            >
+              <RefreshCw size={14} />
+            </button>
           </div>
         </div>
 
-        <ul className="nav-list">
+        {/* Navigation Section */}
+        <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.5px', padding: '12px 10px 4px' }}>
+          Platform Modules
+        </div>
+
+        <ul className="nav-list" style={{ marginTop: '4px' }}>
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -53,39 +67,44 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
                 className={`nav-item ${isActive ? 'active' : ''}`}
                 onClick={() => setActiveTab(item.id)}
               >
-                <Icon size={18} color={isActive ? '#00E6B4' : '#94a3b8'} />
-                <span>{item.label}</span>
+                <Icon size={18} color={isActive ? '#00E6B4' : '#71717a'} />
+                <span style={{ flex: 1 }}>{item.label}</span>
+                {item.badge && (
+                  <span style={{ fontSize: '0.68rem', padding: '2px 6px', borderRadius: '4px', background: isActive ? 'rgba(0, 230, 180, 0.15)' : '#27272a', color: isActive ? '#00E6B4' : '#a1a1aa' }}>
+                    {item.badge}
+                  </span>
+                )}
               </li>
             );
           })}
         </ul>
 
-        {/* If Public Citizen, show locked feature teasers */}
+        {/* Public Teaser Box */}
         {userRole === 'public' && (
           <div className="public-teaser-box" onClick={onSwitchPortal}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#FFB703', fontWeight: '600', fontSize: '0.8rem' }}>
-              <Lock size={14} /> Authority Tools Restricted
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#F59E0B', fontWeight: 600, fontSize: '0.78rem' }}>
+              <Lock size={14} /> Authority Tools Locked
             </div>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px' }}>
-              Traffic Simulation, Risk Evaluator & Audit Reports require Authority Passcode.
+            <div style={{ fontSize: '0.72rem', color: '#a1a1aa', marginTop: '4px', lineHeight: 1.4 }}>
+              Unlock Traffic Simulator, Risk Evaluator & Official Audit PDF reports with Admin Passcode.
             </div>
           </div>
         )}
       </div>
 
-      <div className="sidebar-footer" style={{ flexDirection: 'column', gap: '10px', alignItems: 'flex-start' }}>
+      <div className="sidebar-footer">
         <button 
           className="btn-secondary" 
-          style={{ width: '100%', padding: '8px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+          style={{ width: '100%', padding: '8px 12px', fontSize: '0.78rem', justifyContent: 'center' }}
           onClick={onSwitchPortal}
         >
           <RefreshCw size={14} /> Switch Access Portal
         </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: '#71717a' }}>
           <div className="status-dot"></div>
-          <span>FastAPI & YOLOv8 Engine</span>
+          <span>FastAPI + PyTorch YOLOv8</span>
         </div>
       </div>
-    </div>
+    </aside>
   );
 }

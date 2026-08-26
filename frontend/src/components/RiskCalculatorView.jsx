@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, Gauge, Sliders, CheckCircle2 } from 'lucide-react';
+import { ShieldAlert, Gauge, Sliders, CheckCircle2, Sparkles, BarChart2 } from 'lucide-react';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, CartesianGrid } from 'recharts';
 
 export default function RiskCalculatorView() {
   const [params, setParams] = useState({
@@ -30,18 +31,30 @@ export default function RiskCalculatorView() {
     calculateRisk();
   }, [params]);
 
+  // Data for Risk Weight Breakdown Chart
+  const breakdownChartData = Object.entries(riskResult?.breakdown || {}).map(([key, val]) => ({
+    factor: key.replace(' (35%)', '').replace(' (20%)', '').replace(' (15%)', '').replace(' (10%)', ''),
+    points: val,
+    color: '#00E6B4'
+  }));
+
   return (
     <div>
-      <div className="grid-2">
+      <div className="grid-2" style={{ gap: '20px' }}>
         {/* Controls Panel */}
         <div className="glass-card">
-          <h3 style={{ fontSize: '1.2rem', color: '#fff', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Sliders size={20} color="#00E6B4" /> Multi-Factor Parameter Controls
-          </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '1.05rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Sliders size={18} color="#00E6B4" /> Multi-Factor Risk Parameters
+            </h3>
+            <span style={{ fontSize: '0.72rem', background: '#18181b', color: '#00E6B4', padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(0,230,180,0.2)' }}>
+              Layer 2 Engine
+            </span>
+          </div>
 
-          <div className="grid-2" style={{ gap: '16px' }}>
+          <div className="grid-2" style={{ gap: '14px' }}>
             <div className="form-group">
-              <label className="form-label">Damage Severity:</label>
+              <label className="form-label">Damage Severity Level:</label>
               <select 
                 className="form-select" 
                 value={params.severity}
@@ -68,7 +81,7 @@ export default function RiskCalculatorView() {
             </div>
           </div>
 
-          <div className="grid-2" style={{ gap: '16px' }}>
+          <div className="grid-2" style={{ gap: '14px' }}>
             <div className="form-group">
               <label className="form-label">Vehicle Speed ({params.speed_kmh} km/h):</label>
               <input 
@@ -83,7 +96,7 @@ export default function RiskCalculatorView() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Damage / Pothole Count:</label>
+              <label className="form-label">Detected Pothole Count:</label>
               <input 
                 type="number" 
                 className="form-input"
@@ -95,7 +108,7 @@ export default function RiskCalculatorView() {
             </div>
           </div>
 
-          <div className="grid-2" style={{ gap: '16px' }}>
+          <div className="grid-2" style={{ gap: '14px' }}>
             <div className="form-group">
               <label className="form-label">Traffic Density:</label>
               <select 
@@ -126,76 +139,80 @@ export default function RiskCalculatorView() {
           </div>
 
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#fff', cursor: 'pointer', fontSize: '0.9rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>
               <input 
                 type="checkbox"
                 checked={params.proximity_school_hospital}
                 onChange={(e) => setParams({ ...params, proximity_school_hospital: e.target.checked })}
-                style={{ width: '18px', height: '18px', accentColor: '#00E6B4' }}
+                style={{ width: '16px', height: '16px', accentColor: '#00E6B4' }}
               />
               Near Vulnerable Infrastructure (School / Hospital Zone)
             </label>
           </div>
         </div>
 
-        {/* Output Gauge & Factor Breakdown */}
+        {/* Output Gauge & Factor Breakdown Chart */}
         <div className="glass-card">
-          <h3 style={{ fontSize: '1.2rem', color: '#fff', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Gauge size={20} color="#38BDF8" /> Real-Time Road Risk Index
-          </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '1.05rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Gauge size={18} color="#38BDF8" /> Real-Time Road Risk Index Gauge
+            </h3>
+            <span style={{ fontSize: '0.72rem', color: '#71717a' }}>0-100 Score</span>
+          </div>
 
           {riskResult ? (
             <div>
-              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+              <div style={{ textAlign: 'center', padding: '12px 0' }}>
                 <div style={{ 
                   display: 'inline-flex', 
                   flexDirection: 'column', 
                   alignItems: 'center', 
                   justifyContent: 'center',
-                  width: '150px',
-                  height: '150px',
+                  width: '120px',
+                  height: '120px',
                   borderRadius: '50%',
-                  border: `4px solid ${riskResult.color_hex}`,
-                  boxShadow: `0 0 25px ${riskResult.color_hex}66`,
-                  background: 'rgba(15,23,42,0.9)'
+                  border: `3px solid ${riskResult.color_hex}`,
+                  boxShadow: `0 0 20px ${riskResult.color_hex}44`,
+                  background: '#18181b'
                 }}>
-                  <div style={{ fontSize: '2.8rem', fontWeight: 900, color: '#fff', lineHeight: 1 }}>
+                  <div style={{ fontSize: '2.4rem', fontWeight: 800, color: '#fff', lineHeight: 1 }}>
                     {riskResult.score}
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: riskResult.color_hex, fontWeight: 700, marginTop: '4px' }}>
+                  <div style={{ fontSize: '0.68rem', color: riskResult.color_hex, fontWeight: 700, marginTop: '2px' }}>
                     OUT OF 100
                   </div>
                 </div>
 
-                <div style={{ marginTop: '14px' }}>
-                  <span className={`badge badge-${riskResult.css_class.replace('risk-', '')}`} style={{ fontSize: '1rem', padding: '8px 20px' }}>
+                <div style={{ marginTop: '10px' }}>
+                  <span className={`badge badge-${riskResult.css_class.replace('risk-', '')}`} style={{ fontSize: '0.85rem', padding: '5px 14px' }}>
                     {riskResult.badge}
                   </span>
                 </div>
               </div>
 
-              <div style={{ marginTop: '20px' }}>
-                <h4 style={{ fontSize: '0.85rem', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '12px' }}>
-                  Multi-Factor Weight Breakdown:
+              {/* Multi-Factor Contribution Bar Chart */}
+              <div style={{ marginTop: '16px' }}>
+                <h4 style={{ fontSize: '0.75rem', color: '#71717a', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <BarChart2 size={14} color="#00E6B4" /> Multi-Factor Point Breakdown Graph
                 </h4>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {Object.entries(riskResult.breakdown || {}).map(([key, val]) => (
-                    <div key={key}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#cbd5e1', marginBottom: '4px' }}>
-                        <span>{key}</span>
-                        <span style={{ fontWeight: 700, color: '#00E6B4' }}>+{val} pts</span>
-                      </div>
-                      <div style={{ height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ width: `${(val / 35) * 100}%`, height: '100%', background: '#00E6B4' }} />
-                      </div>
-                    </div>
-                  ))}
+                <div style={{ height: '170px', width: '100%' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={breakdownChartData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#18181b" horizontal={false} />
+                      <XAxis type="number" stroke="#71717a" fontSize={10} tickLine={false} domain={[0, 35]} />
+                      <YAxis type="category" dataKey="factor" stroke="#71717a" fontSize={10} tickLine={false} width={110} />
+                      <Tooltip 
+                        contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fff', fontSize: '0.8rem' }}
+                      />
+                      <Bar dataKey="points" name="Risk Weight (+pts)" fill="#00E6B4" radius={[0, 4, 4, 0]} barSize={12} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             </div>
           ) : (
-            <p style={{ color: '#94a3b8' }}>Calculating risk metrics...</p>
+            <p style={{ color: '#71717a', fontSize: '0.85rem' }}>Calculating risk metrics...</p>
           )}
         </div>
       </div>

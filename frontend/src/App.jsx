@@ -7,10 +7,9 @@ import DigitalTwinMapView from './components/DigitalTwinMapView';
 import TrafficRerouteView from './components/TrafficRerouteView';
 import RiskCalculatorView from './components/RiskCalculatorView';
 import ReportGeneratorView from './components/ReportGeneratorView';
-import { Camera, Map, ShieldAlert, Cpu, FileText, Activity } from 'lucide-react';
+import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, Lock, KeyRound, ArrowUpRight } from 'lucide-react';
 
 export default function App() {
-  // Portal Role State: null = Landing Screen, 'public' = Citizen, 'admin' = Admin
   const [userRole, setUserRole] = useState(() => {
     return sessionStorage.getItem('road_guardian_role') || null;
   });
@@ -28,7 +27,6 @@ export default function App() {
   const handleSelectRole = (role) => {
     setUserRole(role);
     sessionStorage.setItem('road_guardian_role', role);
-    // Reset active tab if public portal selected and current tab is restricted
     if (role === 'public' && ['traffic-reroute', 'risk-calculator', 'municipal-report'].includes(activeTab)) {
       setActiveTab('detection');
     }
@@ -73,10 +71,28 @@ export default function App() {
 
   const headerInfo = getTabHeader();
 
-  // Render Portal Selection Modal if no role selected
   if (!userRole) {
     return <PortalSelectionModal onSelectRole={handleSelectRole} />;
   }
+
+  const renderRestrictedAccessNotice = () => (
+    <div className="glass-card" style={{ textAlign: 'center', padding: '48px 24px', maxWidth: '560px', margin: '40px auto' }}>
+      <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+        <Lock size={28} color="#F59E0B" />
+      </div>
+      <h2 style={{ fontSize: '1.4rem', color: '#fff', marginBottom: '8px' }}>Authority Restricted Module</h2>
+      <p style={{ color: '#a1a1aa', fontSize: '0.88rem', marginBottom: '24px', lineHeight: 1.5 }}>
+        This module requires Authority Admin credentials. Please authenticate using your official passcode to access city traffic simulations, multi-factor risk engines, and municipal audit reports.
+      </p>
+      <button 
+        className="btn-primary" 
+        onClick={handleSwitchPortal}
+        style={{ background: '#F59E0B', color: '#09090b', fontWeight: 600, width: '100%', justifyContent: 'center' }}
+      >
+        <KeyRound size={16} /> Authenticate Authority Admin Access
+      </button>
+    </div>
+  );
 
   return (
     <div className="app-container">
@@ -96,35 +112,44 @@ export default function App() {
           onSwitchPortal={handleSwitchPortal}
         />
 
-        {/* Global Summary Metric Banner */}
-        <div className="grid-4" style={{ marginBottom: '28px' }}>
+        {/* Global Summary Metric Banner — shadcn Stat Cards */}
+        <div className="grid-4" style={{ marginBottom: '24px' }}>
           <div className="stat-card">
             <div>
               <div className="stat-label">Scanned Segments</div>
               <div className="stat-val">{summaryStats?.total_scanned || 142}</div>
+              <div style={{ fontSize: '0.72rem', color: '#00E6B4', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <ArrowUpRight size={12} /> +14.2% from last week
+              </div>
             </div>
-            <div className="stat-icon-wrapper" style={{ background: 'rgba(0,230,180,0.15)' }}>
-              <Activity size={24} color="#00E6B4" />
+            <div className="stat-icon-wrapper" style={{ background: 'rgba(0,230,180,0.1)' }}>
+              <Activity size={20} color="#00E6B4" />
             </div>
           </div>
 
           <div className="stat-card">
             <div>
               <div className="stat-label">Critical Potholes</div>
-              <div className="stat-val" style={{ color: '#FF4757' }}>{summaryStats?.critical_potholes || 18}</div>
+              <div className="stat-val" style={{ color: '#EF4444' }}>{summaryStats?.critical_potholes || 18}</div>
+              <div style={{ fontSize: '0.72rem', color: '#EF4444', marginTop: '4px' }}>
+                Action Required
+              </div>
             </div>
-            <div className="stat-icon-wrapper" style={{ background: 'rgba(255,71,87,0.15)' }}>
-              <ShieldAlert size={24} color="#FF4757" />
+            <div className="stat-icon-wrapper" style={{ background: 'rgba(239,68,68,0.1)' }}>
+              <ShieldAlert size={20} color="#EF4444" />
             </div>
           </div>
 
           <div className="stat-card">
             <div>
               <div className="stat-label">City Risk Score</div>
-              <div className="stat-val" style={{ color: '#FFB703' }}>{summaryStats?.active_road_risk_score || 68.4}</div>
+              <div className="stat-val" style={{ color: '#F59E0B' }}>{summaryStats?.active_road_risk_score || 68.4}</div>
+              <div style={{ fontSize: '0.72rem', color: '#F59E0B', marginTop: '4px' }}>
+                High Risk Level
+              </div>
             </div>
-            <div className="stat-icon-wrapper" style={{ background: 'rgba(255,183,3,0.15)' }}>
-              <Cpu size={24} color="#FFB703" />
+            <div className="stat-icon-wrapper" style={{ background: 'rgba(245,158,11,0.1)' }}>
+              <Cpu size={20} color="#F59E0B" />
             </div>
           </div>
 
@@ -132,9 +157,12 @@ export default function App() {
             <div>
               <div className="stat-label">Digital Twin Nodes</div>
               <div className="stat-val" style={{ color: '#38BDF8' }}>{summaryStats?.digital_twin_nodes || 6}</div>
+              <div style={{ fontSize: '0.72rem', color: '#38BDF8', marginTop: '4px' }}>
+                Live Spatial Stream
+              </div>
             </div>
-            <div className="stat-icon-wrapper" style={{ background: 'rgba(56,189,248,0.15)' }}>
-              <Map size={24} color="#38BDF8" />
+            <div className="stat-icon-wrapper" style={{ background: 'rgba(56,189,248,0.1)' }}>
+              <Map size={20} color="#38BDF8" />
             </div>
           </div>
         </div>
@@ -142,9 +170,9 @@ export default function App() {
         {/* Dynamic View Component */}
         {activeTab === 'detection' && <AIDetectionView />}
         {activeTab === 'digital-twin' && <DigitalTwinMapView />}
-        {activeTab === 'traffic-reroute' && (userRole === 'admin' ? <TrafficRerouteView /> : <AIDetectionView />)}
-        {activeTab === 'risk-calculator' && (userRole === 'admin' ? <RiskCalculatorView /> : <AIDetectionView />)}
-        {activeTab === 'municipal-report' && (userRole === 'admin' ? <ReportGeneratorView /> : <AIDetectionView />)}
+        {activeTab === 'traffic-reroute' && (userRole === 'admin' ? <TrafficRerouteView /> : renderRestrictedAccessNotice())}
+        {activeTab === 'risk-calculator' && (userRole === 'admin' ? <RiskCalculatorView /> : renderRestrictedAccessNotice())}
+        {activeTab === 'municipal-report' && (userRole === 'admin' ? <ReportGeneratorView /> : renderRestrictedAccessNotice())}
       </div>
     </div>
   );
