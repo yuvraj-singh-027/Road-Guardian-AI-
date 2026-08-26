@@ -12,7 +12,7 @@
 
 ## 🏗️ 4-Pillar System Architecture
 
-1. **Perception Engine (`dash.py`, `ROAD.py`)**: Real-time YOLO object detection for potholes, cracks, and surface damage with automatic EXIF GPS logging.
+1. **Perception Engine (`backend/main.py`, `ROAD.py`)**: Real-time YOLO object detection for potholes, cracks, and surface damage with automatic EXIF GPS logging.
 2. **Context Engine (`risk_engine.py`)**: Multi-factor **0–100 Road Risk Score** evaluating Perception Damage (35%), Vehicle Speed (20%), Traffic Volume (15%), Road Category (10%), Weather Hazards (10%), and School/Hospital Proximity (10%).
 3. **Digital Twin Map (`traffic_engine.py`)**: WebGL 3D spatial map categorizing road segments into 🟢 Healthy (0-25), 🟡 Degraded (26-50), 🟠 High Risk (51-75), and 🔴 Critical (76-100).
 4. **Traffic Intelligence Simulator (`traffic_engine.py`)**: Predicts traffic flow shifts across alternate routes when a road segment is closed for maintenance (e.g., *"Closing Road A increases traffic on Road B by +46.8%"*).
@@ -23,7 +23,8 @@
 
 ```
 c:\Users\keshawa kumar\TEMP\Road-Guardian-AI-\
-├── dash.py                                  # Main Streamlit Web Application (Top Executive Nav & Digital Twin)
+├── backend/                                 # FastAPI Backend API Server
+├── frontend/                                # React + Vite Frontend Web Application
 ├── risk_engine.py                           # Layer 2 Risk Score Engine
 ├── traffic_engine.py                        # Layer 3 & 4 Digital Twin & Traffic Simulator
 ├── report_generator.py                      # Municipal PDF Report Generator
@@ -38,17 +39,24 @@ c:\Users\keshawa kumar\TEMP\Road-Guardian-AI-\
 
 ## 🚀 Quickstart Guide
 
-### 1. Install Dependencies
+### 1. Install Backend Dependencies
 ```bash
-pip install streamlit pandas pydeck ultralytics opencv-python pillow fpdf2 geocoder
+pip install -r requirements.txt
 ```
 
-### 2. Run Dashboard Application
+### 2. Run Backend Server (FastAPI)
 ```bash
-streamlit run dash.py
+python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
 
-### 3. Run Live Camera Stream Script
+### 3. Run Frontend Server (React + Vite)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### 4. Run Live Camera Stream Script
 ```bash
 python ROAD.py
 ```
