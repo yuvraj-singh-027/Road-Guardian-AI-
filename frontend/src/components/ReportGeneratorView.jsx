@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FileText, Download, Send, Building2, CheckCircle2, ShieldCheck, AlertCircle, RefreshCw, Landmark, Shield, Radio, FileCheck, Sparkles, PieChart as PieIcon } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
 
@@ -9,6 +9,59 @@ export default function ReportGeneratorView() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isTransmitting, setIsTransmitting] = useState(false);
   const [transmissionReceipt, setTransmissionReceipt] = useState(null);
+
+  // Add state for database maintenance
+  const [dbPasscode, setDbPasscode] = useState('');
+  const [dbMessage, setDbMessage] = useState('');
+  const [dbStatus, setDbStatus] = useState(null);
+  const [isClearing, setIsClearing] = useState(false);
+
+  const fetchDbStatus = async () => {
+    try {
+      const res = await fetch('/api/stats/summary');
+      if (res.ok) {
+        const data = await res.json();
+        setDbStatus(data.db_status);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchDbStatus();
+  }, []);
+
+  const handleClearDb = async () => {
+    if (!dbPasscode) {
+      alert('Please enter the Admin Passcode.');
+      return;
+    }
+    if (!window.confirm('Are you SURE you want to permanently delete ALL hazard records from the database? This cannot be undone.')) {
+      return;
+    }
+    setIsClearing(true);
+    setDbMessage('');
+    try {
+      const res = await fetch('/api/admin/clear-db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passcode: dbPasscode })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setDbMessage('✅ Database cleared successfully.');
+        fetchDbStatus();
+        setDbPasscode('');
+      } else {
+        setDbMessage(`❌ Error: ${data.detail || 'Clear database failed'}`);
+      }
+    } catch (err) {
+      setDbMessage('❌ Failed to connect to server.');
+    } finally {
+      setIsClearing(false);
+    }
+  };
 
   const departmentsList = [
     {
@@ -373,6 +426,68 @@ export default function ReportGeneratorView() {
           </div>
         </div>
       )}
+
+      {/* 5. Database Maintenance Section */}
+      <div className="glass-card" style={{ marginTop: '20px', border: '1.5px solid rgba(239, 68, 68, 0.45)' }}>
+        <h3 style={{ fontSize: '1.05rem', color: '#EF4444', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Shield size={18} color="#EF4444" /> Database Maintenance & Cleanup (Restricted)
+        </h3>
+        <p style={{ fontSize: '0.82rem', color: '#a1a1aa', marginBottom: '16px' }}>
+          Authorized operations to inspect the active database driver and purge collected records from the system.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
+          {/* DB Status */}
+          <div style={{ padding: '14px', background: '#18181b', borderRadius: '10px', border: '1px solid var(--border-muted)' }}>
+            <div style={{ fontSize: '0.72rem', color: '#38BDF8', fontWeight: 600, textTransform: 'uppercase' }}>Database Engine Status</div>
+            <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff', marginTop: '6px' }}>
+              Engine Type: <span style={{ color: '#00E6B4' }}>{dbStatus?.type || 'SQLite'}</span>
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#a1a1aa', marginTop: '4px' }}>
+              Host: {dbStatus?.host || 'Local SQLite File'}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#a1a1aa', marginTop: '4px' }}>
+              Total Logged Records: {dbStatus?.count ?? 0}
+            </div>
+          </div>
+
+          {/* Purge controls */}
+          <div style={{ padding: '14px', background: '#18181b', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+            <div style={{ fontSize: '0.72rem', color: '#EF4444', fontWeight: 600, textTransform: 'uppercase' }}>Purge Records</div>
+            
+            <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
+              <input
+                type="password"
+                className="form-input"
+                placeholder="Authority Passcode"
+                value={dbPasscode}
+                onChange={(e) => setDbPasscode(e.target.value)}
+                style={{ flex: 1, padding: '8px 12px', fontSize: '0.85rem' }}
+              />
+              <button
+                className="btn-primary"
+                onClick={handleClearDb}
+                disabled={isClearing}
+                style={{
+                  background: '#EF4444',
+                  color: '#fff',
+                  fontWeight: 600,
+                  fontSize: '0.82rem',
+                  padding: '8px 16px',
+                  justifyContent: 'center'
+                }}
+              >
+                {isClearing ? <RefreshCw className="spin" size={14} /> : 'Purge DB'}
+              </button>
+            </div>
+            {dbMessage && (
+              <p style={{ fontSize: '0.78rem', marginTop: '8px', fontWeight: 600, color: dbMessage.startsWith('✅') ? '#00E6B4' : '#EF4444' }}>
+                {dbMessage}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

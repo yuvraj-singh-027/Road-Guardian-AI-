@@ -29,11 +29,14 @@ def calculate_road_risk(
     """
     
     # 1. Perception Score (35 max)
-    sev_map = {"Low": 20, "Medium": 50, "High": 80, "Critical": 100}
-    base_sev = sev_map.get(severity, 50)
-    conf_adj = base_sev * max(0.5, min(1.0, confidence))
-    count_mult = 1.0 + (min(damage_count - 1, 5) * 0.1) # Up to +50% for multiple damages
-    perception_score = min(100.0, conf_adj * count_mult)
+    sev_map = {"None": 0, "Healthy": 0, "Clean": 0, "Low": 20, "Medium": 50, "High": 80, "Critical": 100}
+    base_sev = sev_map.get(severity, 0 if damage_count == 0 else 50)
+    if damage_count == 0 or base_sev == 0:
+        perception_score = 0.0
+    else:
+        conf_adj = base_sev * max(0.4, min(1.0, confidence))
+        count_mult = 1.0 + (min(damage_count - 1, 5) * 0.1) # Up to +50% for multiple damages
+        perception_score = min(100.0, conf_adj * count_mult)
     w_perception = (perception_score / 100.0) * 35.0
 
     # 2. Speed Factor (20 max)
@@ -73,7 +76,7 @@ def calculate_road_risk(
     if total_score < 26.0:
         status = "Healthy"
         icon = "🟢"
-        color_hex = "#4CAF50"
+        color_hex = "#475569"
         css_class = "risk-healthy"
     elif total_score < 51.0:
         status = "Degraded"

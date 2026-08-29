@@ -14,7 +14,10 @@ export default function App() {
     return sessionStorage.getItem('road_guardian_role') || null;
   });
 
-  const [activeTab, setActiveTab] = useState('detection');
+  const [activeTab, setActiveTab] = useState(() => {
+    const role = sessionStorage.getItem('road_guardian_role');
+    return role === 'admin' ? 'digital-twin' : 'detection';
+  });
   const [summaryStats, setSummaryStats] = useState(null);
 
   useEffect(() => {
@@ -29,6 +32,8 @@ export default function App() {
     sessionStorage.setItem('road_guardian_role', role);
     if (role === 'public' && ['traffic-reroute', 'risk-calculator', 'municipal-report'].includes(activeTab)) {
       setActiveTab('detection');
+    } else if (role === 'admin' && activeTab === 'detection') {
+      setActiveTab('digital-twin');
     }
   };
 

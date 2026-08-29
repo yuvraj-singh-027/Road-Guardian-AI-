@@ -1,22 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Polyline, Marker, Popup } from 'react-leaflet';
-import L from 'leaflet';
+import React, { useEffect, useState, useRef } from 'react';
+import * as maptilersdk from '@maptiler/sdk';
+import "@maptiler/sdk/dist/maptiler-sdk.css";
 import { AlertCircle, Activity, Navigation, Zap, Layers, MapPin, BarChart2, PieChart as PieIcon } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Cell } from 'recharts';
-
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
 
 const getRiskColor = (severity) => {
   switch (severity) {
     case 'Critical': return '#EF4444';
     case 'High': return '#F59E0B';
     case 'Medium': return '#38BDF8';
-    default: return '#10B981';
+    default: return '#475569';
   }
 };
 
@@ -24,6 +17,10 @@ export default function DigitalTwinMapView() {
   const [network, setNetwork] = useState([]);
   const [selectedRoad, setSelectedRoad] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showRoadNetwork, setShowRoadNetwork] = useState(false);
+
+  const mapContainerRef = useRef(null);
+  const mapObj = useRef(null);
 
   useEffect(() => {
     fetch('/api/traffic/network')
@@ -41,9 +38,164 @@ export default function DigitalTwinMapView() {
       });
   }, []);
 
-  const mapCenter = [28.6139, 77.2090]; // New Delhi center
+  // Initialize MapTiler map
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+    if (mapObj.current) return;
 
-  // Data for Charts
+    maptilersdk.config.apiKey = 'EoWexBznkKn3ph7oAKfn';
+
+    const map = new maptilersdk.Map({
+      container: mapContainerRef.current,
+      style: maptilersdk.MapStyle.DARK_MATTER,
+      center: [77.2090, 28.6139],
+      zoom: 13,
+      terrain: true
+    });
+
+    mapObj.current = map;
+
+    map.on('load', () => {
+      map.addSource('roads-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+
+      map.addLayer({
+        id: 'roads-line',
+        type: 'line',
+        source: 'roads-source',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+          'visibility': showRoadNetwork ? 'visible' : 'none'
+        },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': ['get', 'width'],
+          'line-opacity': 0.88
+        }
+      });
+
+      map.on('mouseenter', 'roads-line', () => {
+        map.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', 'roads-line', () => {
+        map.getCanvas().style.cursor = '';
+      });
+    });
+
+    return () => {
+      if (mapObj.current) {
+        mapObj.current.remove();
+        mapObj.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const map = mapObj.current;
+    if (!map) return;
+    if (map.getLayer('roads-line')) {
+      map.setLayoutProperty('roads-line', 'visibility', showRoadNetwork ? 'visible' : 'none');
+    }
+  }, [showRoadNetwork]);
+
+  // Sync data & interaction state with MapTiler layers
+  useEffect(() => {
+    const map = mapObj.current;
+    if (!map || network.length === 0) return;
+
+    const updateSource = () => {
+      const source = map.getSource('roads-source');
+      if (!source) return;
+
+      const features = network.map(road => ({
+        type: 'Feature',
+        properties: {
+          id: road.id,
+          name: road.name,
+          severity: road.severity,
+          potholes: road.potholes,
+          color: getRiskColor(road.severity),
+          width: selectedRoad?.id === road.id ? 8 : 5
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [road.start[0], road.start[1]],
+            [road.end[0], road.end[1]]
+          ]
+        }
+      }));
+
+      source.setData({
+        type: 'FeatureCollection',
+        features: features
+      });
+
+      // Clear existing custom elements if React remounts
+      const existingMarkers = document.querySelectorAll('.mapboxgl-marker');
+      existingMarkers.forEach(el => el.remove());
+
+
+
+      // Fetch dynamic database potholes
+      fetch('/api/detections')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.detections && data.detections.length > 0) {
+            data.detections.forEach(d => {
+              let markerColor = '#10B981'; // Default Low (Green)
+              if (d.Severity === 'Critical') markerColor = '#EF4444'; // Red
+              else if (d.Severity === 'High') markerColor = '#F59E0B'; // Orange/Yellow
+              else if (d.Severity === 'Medium') markerColor = '#38BDF8'; // Blue
+
+              const popup = new maptilersdk.Popup({ offset: 25 })
+                .setHTML(`
+                  <div style="color: #0f172a; font-family: sans-serif; font-size: 11px; padding: 2px;">
+                    <span style="color: ${markerColor}; font-weight: bold;">⚠️ Reported Pothole (${d.Severity})</span><br/>
+                    File: <b>${d.Image}</b><br/>
+                    Risk Score: <b>${d.Risk_Score}/100</b>
+                  </div>
+                `);
+
+              new maptilersdk.Marker({ color: markerColor, scale: 1.1 })
+                .setLngLat([d.Longitude, d.Latitude])
+                .setPopup(popup)
+                .addTo(map);
+            });
+
+            // Center on the latest reported pothole
+            const latest = data.detections[0];
+            map.setCenter([latest.Longitude, latest.Latitude]);
+            map.setZoom(14);
+          }
+        })
+        .catch(err => console.error('Error fetching dynamic potholes:', err));
+    };
+
+    if (map.loaded()) {
+      updateSource();
+    } else {
+      map.once('load', updateSource);
+    }
+
+    const handleClick = (e) => {
+      if (e.features && e.features.length > 0) {
+        const clickedId = e.features[0].properties.id;
+        const road = network.find(r => r.id === clickedId);
+        if (road) {
+          setSelectedRoad(road);
+        }
+      }
+    };
+
+    map.off('click', 'roads-line', handleClick);
+    map.on('click', 'roads-line', handleClick);
+
+  }, [network, selectedRoad]);
+
   const capacityVsTrafficData = network.map(seg => ({
     name: seg.name.replace('Northern Arterial Highway', 'Road A')
                   .replace('Central Bypass Ring', 'Road B')
@@ -66,55 +218,35 @@ export default function DigitalTwinMapView() {
         <div className="glass-card" style={{ padding: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <h3 style={{ fontSize: '1.05rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Navigation size={18} color="#00E6B4" /> 3D Spatial Road Network & GIS Telemetry Map
+              <Navigation size={18} color="#00E6B4" /> MapTiler vector spatial Road Network Map
             </h3>
-            <span style={{ fontSize: '0.72rem', background: '#18181b', color: '#00E6B4', padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(0,230,180,0.2)' }}>
-              Live GIS Vector Layers
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button 
+                onClick={() => setShowRoadNetwork(prev => !prev)}
+                style={{
+                  fontSize: '0.72rem',
+                  background: showRoadNetwork ? 'rgba(0, 230, 180, 0.2)' : '#18181b',
+                  color: showRoadNetwork ? '#00E6B4' : '#a1a1aa',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  border: `1px solid ${showRoadNetwork ? 'rgba(0,230,180,0.4)' : 'var(--border-muted)'}`,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {showRoadNetwork ? '🚧 Hide Repair Lines' : '🚧 Show Repair Lines'}
+              </button>
+              <span style={{ fontSize: '0.72rem', background: '#18181b', color: '#00E6B4', padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(0,230,180,0.2)' }}>
+                Live GIS WebGL Layers
+              </span>
+            </div>
           </div>
 
           <div style={{ height: '440px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-muted)' }}>
-            <MapContainer 
-              center={mapCenter} 
-              zoom={13} 
-              scrollWheelZoom={true} 
-              style={{ height: '100%', width: '100%', background: '#09090b' }}
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://carto.com/">CARTO</a> Dark Matter'
-                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-              />
-
-              {network.map((road) => {
-                const positions = [
-                  [road.start[1], road.start[0]],
-                  [road.end[1], road.end[0]]
-                ];
-                const color = getRiskColor(road.severity);
-
-                return (
-                  <React.Fragment key={road.id}>
-                    <Polyline 
-                      positions={positions} 
-                      pathOptions={{ color, weight: selectedRoad?.id === road.id ? 8 : 5, opacity: 0.88 }} 
-                      eventHandlers={{
-                        click: () => setSelectedRoad(road)
-                      }}
-                    />
-
-                    <Marker 
-                      position={positions[0]} 
-                      eventHandlers={{ click: () => setSelectedRoad(road) }}
-                    >
-                      <Popup>
-                        <strong style={{ color: '#00E6B4' }}>{road.name}</strong><br />
-                        Potholes: {road.potholes} | Risk: {road.severity}
-                      </Popup>
-                    </Marker>
-                  </React.Fragment>
-                );
-              })}
-            </MapContainer>
+            <div ref={mapContainerRef} style={{ height: '100%', width: '100%', background: '#09090b' }} />
           </div>
         </div>
 

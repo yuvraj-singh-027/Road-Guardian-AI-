@@ -10,7 +10,7 @@ when a road segment is closed for maintenance.
 import math
 import requests
 from typing import Dict, List, Any
-from risk_engine import calculate_road_risk
+from .risk_engine import calculate_road_risk
 
 def haversine_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculates real-world distance between two GPS coordinates in kilometers."""
@@ -415,6 +415,37 @@ def get_default_city_network(center_lat: float = 28.6139, center_lon: float = 77
             }
         ]
 
+    # Dynamic database matching logic
+    try:
+        from .db_manager import get_all_detections
+        df = get_all_detections()
+    except Exception:
+        df = None
+
+    for s in raw_segments:
+        if df is not None and not df.empty:
+            potholes_count = 0
+            max_severity = "Low"
+            max_conf = 0.0
+            
+            for _, row in df.iterrows():
+                landmark = str(row.get("Landmark", "")).lower()
+                if landmark and (landmark in s["name"].lower() or s["name"].lower() in landmark):
+                    potholes_count += 1
+                    row_sev = str(row.get("Severity", "Low"))
+                    severity_ranks = {"Low": 1, "Medium": 2, "High": 3, "Critical": 4}
+                    if severity_ranks.get(row_sev, 1) > severity_ranks.get(max_severity, 1):
+                        max_severity = row_sev
+                    max_conf = max(max_conf, float(row.get("Confidence", 0.0)))
+            
+            s["potholes"] = potholes_count
+            s["severity"] = max_severity if potholes_count > 0 else "Low"
+            s["confidence"] = max_conf if potholes_count > 0 else 0.0
+        else:
+            s["potholes"] = 0
+            s["severity"] = "Low"
+            s["confidence"] = 0.0
+
     processed_network = []
     for s in raw_segments:
         # Calculate real-world exact distance in KM
@@ -434,7 +465,7 @@ def get_default_city_network(center_lat: float = 28.6139, center_lon: float = 77
         )
 
         if risk_info["status"] == "Healthy":
-            rgba = [76, 175, 80, 230]      # Green
+            rgba = [71, 85, 105, 180]      # Neutral Slate Gray
         elif risk_info["status"] == "Degraded":
             rgba = [255, 193, 7, 235]     # Yellow
         elif risk_info["status"] == "High Risk":

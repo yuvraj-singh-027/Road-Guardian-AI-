@@ -12,7 +12,7 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
 
   const navItems = userRole === 'public' 
     ? allNavItems.filter(item => item.publicAccess)
-    : allNavItems;
+    : allNavItems.filter(item => item.id !== 'detection');
 
   return (
     <aside className="sidebar">

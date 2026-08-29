@@ -30,9 +30,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- Leaflet GIS Map CDN -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- MapTiler SDK CDN -->
+    <script src="https://cdn.maptiler.com/maptiler-sdk-js/v2.3.0/maptiler-sdk.umd.js"></script>
+    <link href="https://cdn.maptiler.com/maptiler-sdk-js/v2.3.0/maptiler-sdk.css" rel="stylesheet" />
 
     <style>
         html, body {
@@ -199,6 +199,9 @@
                 <div class="flex items-center gap-2">
                     <button onclick="loadLeafletMap('grid')" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700">Grid Twin</button>
                     <button onclick="loadLeafletMap('osm')" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg">Live OpenStreetMap</button>
+                    <button id="toggle-roads-btn" onclick="toggleRoadNetworkVisibility()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5">
+                        <i class="fa-solid fa-road"></i> <span id="toggle-roads-text">Show Repair Lines</span>
+                    </button>
                 </div>
             </div>
 
@@ -357,27 +360,45 @@
                         </div>
                         <div class="flex flex-col gap-3">
                             <div>
-                                <label class="text-xs text-slate-400 mb-1 block">Report Title / Image Name</label>
-                                <input type="text" id="report-img-name" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm">
+                                <label class="text-xs text-slate-400 mb-1 block font-medium">Report Title / Landmark Name</label>
+                                <input type="text" id="report-img-name" placeholder="e.g. Deep Pothole near Gate 3" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm">
                             </div>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="text-xs text-slate-400 mb-1 block">Latitude GPS</label>
-                                    <input type="number" step="0.0001" id="report-lat" value="28.6139" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm">
-                                </div>
-                                <div>
-                                    <label class="text-xs text-slate-400 mb-1 block">Longitude GPS</label>
-                                    <button onclick="getGPSLocation()" id="btn-gps" title="Use device GPS" class="w-full h-[38px] bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold rounded-lg border border-teal-500/40 flex items-center justify-center gap-1">
-                                        <i class="fa-solid fa-location-crosshairs"></i> Use GPS
+                            <div>
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="text-xs text-teal-300 font-semibold flex items-center gap-1.5">
+                                        <i class="fa-solid fa-map-location-dot"></i> Actual Street Address
+                                    </label>
+                                    <button type="button" onclick="getGPSLocation()" id="btn-gps" title="Auto-detect actual address from device GPS" class="px-2.5 py-1 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 text-xs font-bold rounded-lg border border-teal-500/40 flex items-center gap-1.5 transition-all">
+                                        <i class="fa-solid fa-location-crosshairs text-teal-400"></i> Use GPS
                                     </button>
                                 </div>
+                                <div class="relative">
+                                    <input type="text" id="report-address" placeholder="Click 'Use GPS' or enter street address..." class="w-full bg-slate-900 border border-slate-700 focus:border-teal-400 rounded-lg p-2.5 text-sm text-slate-100 placeholder:text-slate-500">
+                                </div>
+                                <div id="gps-address-badge" class="hidden mt-1.5 flex items-center justify-between text-[11px] text-slate-400 bg-slate-800/80 px-2.5 py-1.5 rounded-md border border-slate-700/60">
+                                    <span class="flex items-center gap-1.5 text-teal-300 font-medium">
+                                        <i class="fa-solid fa-circle-check text-emerald-400"></i>
+                                        <span id="gps-address-status">Address auto-detected from GPS</span>
+                                    </span>
+                                    <span id="gps-coord-display" class="font-mono text-slate-400 text-[10px]"></span>
+                                </div>
+                                <!-- Hidden coordinate stores -->
+                                <input type="hidden" id="report-lat" value="">
+                                <input type="hidden" id="report-lon" value="">
+                                
+                                <div id="report-exif-warning" class="hidden mt-2.5 p-3 bg-red-950/20 border border-red-500/30 rounded-lg flex flex-col gap-2">
+                                    <div class="flex items-center gap-2 text-red-400 text-xs font-bold">
+                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                        <span>Camera Geotag Missing (No EXIF Data Found)</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 leading-normal">This image has no embedded GPS geotags. Please click <b>Use GPS</b> or type a street address above to map the hazard.</p>
+                                    <div class="flex gap-2">
+                                        <button type="button" onclick="getGPSLocation(); document.getElementById('report-exif-warning').classList.add('hidden');" class="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white text-[11px] font-bold rounded-md">Resolve via Device GPS</button>
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label class="text-xs text-slate-400 mb-1 block">Longitude GPS (manual)</label>
-                                <input type="number" step="0.0001" id="report-lon" value="77.2090" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm">
-                            </div>
-                            <div>
-                                <label class="text-xs text-slate-400 mb-1 block">Observed Severity</label>
+                                <label class="text-xs text-slate-400 mb-1 block font-medium">Observed Severity</label>
                                 <select id="report-severity" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm">
                                     <option value="Low">Low</option>
                                     <option value="Medium">Medium</option>
@@ -572,6 +593,7 @@
     <script>
         let currentPortal = 'Public'; // 'Public' or 'Admin'
         let leafletMapObj = null;
+        let showRoadNetwork = false;
 
         // Initialize App
         document.addEventListener('DOMContentLoaded', () => {
@@ -648,33 +670,138 @@
                     leafletMapObj.remove();
                 }
 
-                leafletMapObj = L.map('leaflet-map').setView([28.6139, 77.2090], 14);
+                maptilersdk.config.apiKey = 'EoWexBznkKn3ph7oAKfn';
+                leafletMapObj = new maptilersdk.Map({
+                    container: 'leaflet-map',
+                    style: maptilersdk.MapStyle.DARK_MATTER,
+                    center: [77.2090, 28.6139],
+                    zoom: 13,
+                    terrain: true
+                });
 
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                    attribution: '&copy; OpenStreetMap &copy; CARTO',
-                    maxZoom: 19
-                }).addTo(leafletMapObj);
+                leafletMapObj.on('load', () => {
+                    const features = segments.map(s => ({
+                        type: 'Feature',
+                        properties: {
+                            id: s.id,
+                            name: s.name,
+                            status: s.status,
+                            risk_score: s.risk_score,
+                            potholes: s.potholes || 0,
+                            color: s.color_hex
+                        },
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: [
+                                [s.start[0], s.start[1]],
+                                [s.end[0], s.end[1]]
+                            ]
+                        }
+                    }));
 
-                segments.forEach(s => {
-                    const start = [s.start[1], s.start[0]];
-                    const end = [s.end[1], s.end[0]];
+                    leafletMapObj.addSource('network-roads', {
+                        type: 'geojson',
+                        data: {
+                            type: 'FeatureCollection',
+                            features: features
+                        }
+                    });
 
-                    const polyline = L.polyline([start, end], {
-                        color: s.color_hex,
-                        weight: 6,
-                        opacity: 0.85
-                    }).addTo(leafletMapObj);
+                    leafletMapObj.addLayer({
+                        id: 'roads-line-layer',
+                        type: 'line',
+                        source: 'network-roads',
+                        layout: {
+                            'line-join': 'round',
+                            'line-cap': 'round',
+                            'visibility': showRoadNetwork ? 'visible' : 'none'
+                        },
+                        paint: {
+                            'line-color': ['get', 'color'],
+                            'line-width': 6,
+                            'line-opacity': 0.85
+                        }
+                    });
 
-                    polyline.bindPopup(`
-                        <div class="text-slate-900 font-sans">
-                            <b class="text-sm">${s.name}</b><br>
-                            Status: <b>${s.status}</b><br>
-                            Risk Score: <b>${s.risk_score} / 100</b><br>
-                            Potholes: <b>${s.potholes || 0}</b>
-                        </div>
-                    `);
+
+
+                    // Fetch dynamic database potholes
+                    fetch('/api/detections')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success && data.detections && data.detections.length > 0) {
+                            data.detections.forEach(d => {
+                                let markerColor = '#10B981'; // Default Low (Green)
+                                if (d.Severity === 'Critical') markerColor = '#EF4444'; // Red
+                                else if (d.Severity === 'High') markerColor = '#F59E0B'; // Orange/Yellow
+                                else if (d.Severity === 'Medium') markerColor = '#38BDF8'; // Blue
+
+                                const popup = new maptilersdk.Popup({ offset: 25 })
+                                    .setHTML(`
+                                        <div style="color: #0f172a; font-family: sans-serif; font-size: 11px; padding: 2px;">
+                                            <span style="color: ${markerColor}; font-weight: bold;">⚠️ Reported Pothole (${d.Severity})</span><br/>
+                                            Image: <b>${d.Image}</b><br/>
+                                            Confidence: <b>${(d.Confidence * 100).toFixed(1)}%</b><br/>
+                                            Risk Score: <b>${d.Risk_Score}/100</b>
+                                        </div>
+                                    `);
+
+                                new maptilersdk.Marker({ color: markerColor, scale: 1.1 })
+                                    .setLngLat([d.Longitude, d.Latitude])
+                                    .setPopup(popup)
+                                    .addTo(leafletMapObj);
+                            });
+
+                            // Auto-center map on the latest reported pothole
+                            const latest = data.detections[0];
+                            leafletMapObj.setCenter([latest.Longitude, latest.Latitude]);
+                            leafletMapObj.setZoom(14);
+                        }
+                    });
+
+                    leafletMapObj.on('click', 'roads-line-layer', (e) => {
+                        if (e.features && e.features.length > 0) {
+                            const props = e.features[0].properties;
+                            new maptilersdk.Popup()
+                                .setLngLat(e.lngLat)
+                                .setHTML(`
+                                    <div style="color: #0f172a; font-family: sans-serif; font-size: 11px; padding: 2px;">
+                                        <b>${props.name}</b><br>
+                                        Status: <b>${props.status}</b><br>
+                                        Risk Score: <b>${props.risk_score} / 100</b><br>
+                                        Potholes: <b>${props.potholes}</b>
+                                    </div>
+                                `)
+                                .addTo(leafletMapObj);
+                        }
+                    });
+
+                    leafletMapObj.on('mouseenter', 'roads-line-layer', () => {
+                        leafletMapObj.getCanvas().style.cursor = 'pointer';
+                    });
+                    leafletMapObj.on('mouseleave', 'roads-line-layer', () => {
+                        leafletMapObj.getCanvas().style.cursor = '';
+                    });
                 });
             });
+        }
+
+        function toggleRoadNetworkVisibility() {
+            showRoadNetwork = !showRoadNetwork;
+            const btn = document.getElementById('toggle-roads-btn');
+            const text = document.getElementById('toggle-roads-text');
+            if (showRoadNetwork) {
+                btn.classList.remove('bg-slate-800', 'text-slate-300');
+                btn.classList.add('bg-emerald-600', 'text-white');
+                text.innerText = "Hide Repair Lines";
+            } else {
+                btn.classList.remove('bg-emerald-600', 'text-white');
+                btn.classList.add('bg-slate-800', 'text-slate-300');
+                text.innerText = "Show Repair Lines";
+            }
+            if (leafletMapObj && leafletMapObj.getLayer('roads-line-layer')) {
+                leafletMapObj.setLayoutProperty('roads-line-layer', 'visibility', showRoadNetwork ? 'visible' : 'none');
+            }
         }
 
         // --- RISK ENGINE CALCULATOR ---
@@ -902,6 +1029,29 @@
             if (f.size > 15 * 1024 * 1024) { alert('Image too large. Max 15MB.'); return; }
             _capturedBlob = f;
             showPreview(URL.createObjectURL(f), f.name || '');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const buffer = e.target.result;
+                const dataView = new DataView(buffer);
+                let hasExif = false;
+                if (buffer.byteLength > 4 && dataView.getUint16(0, false) === 0xffd8) {
+                    let offset = 2;
+                    while (offset < buffer.byteLength - 4) {
+                        const marker = dataView.getUint16(offset, false);
+                        if (marker === 0xffe1) {
+                            hasExif = true;
+                            break;
+                        } else if ((marker & 0xff00) !== 0xff00) {
+                            break;
+                        }
+                        offset += 2 + dataView.getUint16(offset + 2, false);
+                    }
+                }
+                _hasExif = hasExif;
+                validateLocationState();
+            };
+            reader.readAsArrayBuffer(f);
         }
 
         function showPreview(dataUrlOrBlob, fallbackName = '') {
@@ -929,34 +1079,124 @@
             document.getElementById('block-hint').classList.remove('hidden');
             const g = document.getElementById('gallery-file-input');
             if (g) g.value = '';
+            _hasExif = false;
+            validateLocationState();
+        }
+
+        function decimalToDMS(deg, isLat) {
+            if (isNaN(deg) || deg === null || deg === undefined) return '';
+            const absolute = Math.abs(deg);
+            const degrees = Math.floor(absolute);
+            const minutesNotTruncated = (absolute - degrees) * 60;
+            const minutes = Math.floor(minutesNotTruncated);
+            const seconds = ((minutesNotTruncated - minutes) * 60).toFixed(2);
+            const direction = isLat ? (deg >= 0 ? "N" : "S") : (deg >= 0 ? "E" : "W");
+            return `${degrees}°${minutes}'${seconds}" ${direction}`;
+        }
+
+        async function reverseGeocode(lat, lon) {
+            try {
+                const res = await fetch(`/api/location/reverse-geocode?lat=${lat}&lon=${lon}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.address) return data.address;
+                }
+            } catch (e) {
+                console.warn('Backend reverse-geocode failed, attempting fallback...', e);
+            }
+            try {
+                const osm = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`, {
+                    headers: { 'Accept-Language': 'en' }
+                });
+                if (osm.ok) {
+                    const data = await osm.json();
+                    if (data.display_name) {
+                        const addr = data.address || {};
+                        const parts = [
+                            addr.road || addr.pedestrian || addr.street,
+                            addr.suburb || addr.neighbourhood || addr.quarter,
+                            addr.city || addr.town || addr.village || addr.county,
+                            addr.state,
+                            addr.postcode
+                        ].filter(Boolean);
+                        return parts.length > 0 ? parts.join(', ') : data.display_name;
+                    }
+                }
+            } catch (e) {
+                console.warn('Direct Nominatim geocoding error:', e);
+            }
+            return `Road Segment (${lat.toFixed(4)}° N, ${lon.toFixed(4)}° E)`;
         }
 
         function getGPSLocation() {
             const btn = document.getElementById('btn-gps');
+            const addrInput = document.getElementById('report-address');
+            const titleInput = document.getElementById('report-img-name');
+            const latInput = document.getElementById('report-lat');
+            const lonInput = document.getElementById('report-lon');
+            const badge = document.getElementById('gps-address-badge');
+            const coordDisplay = document.getElementById('gps-coord-display');
+            const statusText = document.getElementById('gps-address-status');
+
             if (!navigator.geolocation) { alert('GPS not supported by this browser.'); return; }
             btn.disabled = true;
             const origHtml = btn.innerHTML;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Getting GPS...';
+            if (addrInput) addrInput.placeholder = 'Detecting actual street address from GPS...';
+
             navigator.geolocation.getCurrentPosition(
-                pos => {
-                    document.getElementById('report-lat').value = pos.coords.latitude.toFixed(6);
-                    document.getElementById('report-lon').value = pos.coords.longitude.toFixed(6);
-                    btn.innerHTML = '<i class="fa-solid fa-check"></i> GPS OK';
-                    setTimeout(() => { btn.disabled = false; btn.innerHTML = origHtml; }, 1800);
+                async pos => {
+                    const lat = pos.coords.latitude;
+                    const lon = pos.coords.longitude;
+                    if (latInput) latInput.value = lat.toFixed(6);
+                    if (lonInput) lonInput.value = lon.toFixed(6);
+
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Resolving Address...';
+                    const resolvedAddress = await reverseGeocode(lat, lon);
+
+                    if (addrInput) {
+                        addrInput.value = resolvedAddress;
+                    }
+                    if (titleInput && !titleInput.value.trim()) {
+                        titleInput.value = resolvedAddress.split(',')[0] + ' Road Damage';
+                    }
+                    if (coordDisplay) {
+                        coordDisplay.innerHTML = `${lat.toFixed(6)}°, ${lon.toFixed(6)}°<br><span style="font-size: 0.68rem; color: #a1a1aa;">DMS: ${decimalToDMS(lat, true)}, ${decimalToDMS(lon, false)}</span>`;
+                    }
+                    if (statusText) {
+                        statusText.innerText = 'GPS Address Verified';
+                    }
+                    if (badge) {
+                        badge.classList.remove('hidden');
+                    }
+                    validateLocationState();
+
+                    btn.innerHTML = '<i class="fa-solid fa-check text-emerald-400"></i> Address Set';
+                    setTimeout(() => { btn.disabled = false; btn.innerHTML = origHtml; }, 2200);
                 },
                 err => {
-                    alert('GPS failed: ' + (err.message || 'unknown error') + '. Enter coordinates manually.');
+                    alert('GPS failed: ' + (err.message || 'unknown error') + '. Please enter address manually.');
                     btn.disabled = false;
                     btn.innerHTML = origHtml;
+                    if (addrInput) addrInput.placeholder = 'Enter street address manually...';
                 },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
         }
 
         // --- REPORT HAZARD SUBMIT ---
         function submitReport() {
-            if (!_capturedBlob && !document.getElementById('report-img-name').value.trim()) {
-                alert('⚠️ Please capture/upload a photo first, or enter an image name.');
+            const lat = document.getElementById('report-lat').value;
+            const lon = document.getElementById('report-lon').value;
+            const address = document.getElementById('report-address').value.trim();
+
+            if (!lat && !lon && !address) {
+                alert('⚠️ Location details missing! Please click "Use GPS" or enter a manual street address to identify the pothole location before submitting.');
+                return;
+            }
+
+            if (!_capturedBlob && !document.getElementById('report-img-name').value.trim() && !address) {
+                alert('⚠️ Please capture/upload a photo first, or enter an address/title.');
                 return;
             }
             const statusElem = document.getElementById('report-status');
@@ -971,7 +1211,8 @@
                 const fname = document.getElementById('report-img-name').value.trim() || ('citizen_capture_' + Date.now() + ext);
                 formData.append('image', _capturedBlob, fname);
             }
-            formData.append('image_name', document.getElementById('report-img-name').value);
+            formData.append('image_name', document.getElementById('report-img-name').value || 'Citizen Reported Hazard');
+            formData.append('address', document.getElementById('report-address').value || '');
             formData.append('latitude', document.getElementById('report-lat').value);
             formData.append('longitude', document.getElementById('report-lon').value);
             formData.append('severity', document.getElementById('report-severity').value);
@@ -1063,6 +1304,23 @@
                 }
             });
         }
+
+        let _hasExif = false;
+
+        function validateLocationState() {
+            const addressVal = document.getElementById('report-address').value.trim();
+            const latVal = document.getElementById('report-lat').value;
+            const warningBox = document.getElementById('report-exif-warning');
+
+            if (!_hasExif && !addressVal && !latVal) {
+                if (warningBox) warningBox.classList.remove('hidden');
+            } else {
+                if (warningBox) warningBox.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('report-address').addEventListener('input', validateLocationState);
+        document.getElementById('report-lat').addEventListener('change', validateLocationState);
     </script>
 </body>
 </html>

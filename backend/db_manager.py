@@ -19,17 +19,13 @@ try:
 except ImportError:
     MYSQL_AVAILABLE = False
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(BACKEND_DIR) # Root directory
 SQLITE_DB_PATH = os.path.join(BASE_DIR, "road_guardian.db")
 CSV_FILE_PATH = os.path.join(BASE_DIR, "pothole_data.csv")
 
 # Load backend modules for risk calculation
-try:
-    from risk_engine import calculate_road_risk
-except ImportError:
-    import sys
-    sys.path.append(BASE_DIR)
-    from risk_engine import calculate_road_risk
+from .risk_engine import calculate_road_risk
 
 
 def get_db_connection():
@@ -143,10 +139,10 @@ def init_db():
         conn.close()
     
     # Auto-migrate legacy CSV data if DB table is currently empty
-    migrate_csv_to_db()
+    # migrate_csv_to_db()
 
-    # Seed demo hazard records for hackathon presentation
-    seed_demo_data_if_empty()
+    # Seed demo hazard records for hackathon presentation (Commented out to keep DB empty by default)
+    # seed_demo_data_if_empty()
 
 
 def compute_image_hash(image_path_or_bytes) -> str:
