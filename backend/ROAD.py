@@ -15,16 +15,17 @@ import geocoder
 
 # Get the directory of the current script
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
 
 # ================== LOAD MODEL ==================
-model_path = os.path.join(BASE_DIR, "runs", "detect", "train2", "weights", "best.pt")
+model_path = os.path.join(ROOT_DIR, "runs", "detect", "train2", "weights", "best.pt")
 model = YOLO(model_path)
 
 # ================== SETUP ==================
-folder = os.path.join(BASE_DIR, "potholes")
+folder = os.path.join(ROOT_DIR, "potholes")
 os.makedirs(folder, exist_ok=True)
 
-csv_file = os.path.join(BASE_DIR, "pothole_data.csv")
+csv_file = os.path.join(ROOT_DIR, "pothole_data.csv")
 
 if not os.path.exists(csv_file):
     with open(csv_file, "w", newline="") as f:

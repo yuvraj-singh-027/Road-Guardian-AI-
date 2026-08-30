@@ -3,12 +3,13 @@ from ultralytics import YOLO
 
 # Resolve dynamic paths based on the current system user & workspace
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
 USER_HOME = os.path.expanduser("~")
 
 # Automatically locate data.yaml across common dataset paths
 possible_paths = [
-    os.path.join(BASE_DIR, "dataset", "data.yaml"),
-    os.path.join(BASE_DIR, "data.yaml"),
+    os.path.join(ROOT_DIR, "dataset", "data.yaml"),
+    os.path.join(ROOT_DIR, "data.yaml"),
     os.path.join(USER_HOME, "Desktop", "Pothole.v1-raw.yolov8", "data.yaml"),
     os.path.join(USER_HOME, "Downloads", "Pothole.v1-raw.yolov8", "data.yaml"),
 ]
