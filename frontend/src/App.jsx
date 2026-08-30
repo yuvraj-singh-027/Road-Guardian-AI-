@@ -7,39 +7,144 @@ import DigitalTwinMapView from './components/DigitalTwinMapView';
 import TrafficRerouteView from './components/TrafficRerouteView';
 import RiskCalculatorView from './components/RiskCalculatorView';
 import ReportGeneratorView from './components/ReportGeneratorView';
-import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, Lock, KeyRound, ArrowUpRight } from 'lucide-react';
+import AuthPortal from './components/AuthPortal';
+import UserProfileModal from './components/UserProfileModal';
+import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, Lock, KeyRound, ArrowUpRight, Loader } from 'lucide-react';
+
+// --- GLOBAL FETCH TOKEN INTERCEPTOR ---
+if (typeof window !== 'undefined' && !window.__fetch_intercepted__) {
+  window.__fetch_intercepted__ = true;
+  const originalFetch = window.fetch;
+  window.fetch = async function (url, options = {}) {
+    const token = localStorage.getItem('road_guardian_token');
+    if (token) {
+      options.headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${token}`
+      };
+    }
+    
+    const response = await originalFetch(url, options);
+    
+    // Handle session expiration (401)
+    if (response.status === 401 && !url.includes('/api/auth/login') && !url.includes('/api/auth/signup') && !url.includes('/api/auth/google/mock-login')) {
+      localStorage.removeItem('road_guardian_token');
+      sessionStorage.removeItem('road_guardian_role');
+      window.dispatchEvent(new Event('auth-unauthorized'));
+    }
+    
+    return response;
+  };
+}
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
+  const [authParams, setAuthParams] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    const token = params.get('token');
+    return { action, token };
+  });
+
   const [userRole, setUserRole] = useState(() => {
     return sessionStorage.getItem('road_guardian_role') || null;
   });
 
-  const [activeTab, setActiveTab] = useState(() => {
-    const role = sessionStorage.getItem('road_guardian_role');
-    return role === 'admin' ? 'digital-twin' : 'detection';
-  });
+  const [activeTab, setActiveTab] = useState('detection');
   const [summaryStats, setSummaryStats] = useState(null);
 
+  // Sync auth state
+  const checkAuth = async () => {
+    const token = localStorage.getItem('road_guardian_token');
+    if (!token) {
+      setIsAuthLoading(false);
+      setIsAuthenticated(false);
+      setUser(null);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/auth/me');
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+        setIsAuthenticated(true);
+        setUserRole(data.role);
+        sessionStorage.setItem('road_guardian_role', data.role);
+        
+        // Auto set default tab based on role
+        setActiveTab(data.role === 'admin' ? 'digital-twin' : 'detection');
+      } else {
+        localStorage.removeItem('road_guardian_token');
+        sessionStorage.removeItem('road_guardian_role');
+        setIsAuthenticated(false);
+        setUser(null);
+      }
+    } catch (err) {
+      console.error('Auth verification error:', err);
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetch('/api/stats/summary')
-      .then((res) => res.json())
-      .then((data) => setSummaryStats(data))
-      .catch((err) => console.error('Stats sync error:', err));
+    // 1. Check for incoming login token (e.g. from Google OAuth Redirect)
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get('token');
+    if (urlToken) {
+      localStorage.setItem('road_guardian_token', urlToken);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setAuthParams({ action: null, token: null });
+    }
+
+    checkAuth();
+
+    // 2. Listen to global unauthorized event
+    const handleUnauthorized = () => {
+      setIsAuthenticated(false);
+      setUser(null);
+      setUserRole(null);
+    };
+
+    window.addEventListener('auth-unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth-unauthorized', handleUnauthorized);
   }, []);
+
+  // Fetch summary stats when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetch('/api/stats/summary')
+        .then((res) => res.json())
+        .then((data) => setSummaryStats(data))
+        .catch((err) => console.error('Stats sync error:', err));
+    }
+  }, [isAuthenticated, activeTab]);
 
   const handleSelectRole = (role) => {
     setUserRole(role);
     sessionStorage.setItem('road_guardian_role', role);
-    if (role === 'public' && ['traffic-reroute', 'risk-calculator', 'municipal-report'].includes(activeTab)) {
-      setActiveTab('detection');
-    } else if (role === 'admin' && activeTab === 'detection') {
-      setActiveTab('digital-twin');
-    }
+    setActiveTab(role === 'admin' ? 'digital-twin' : 'detection');
   };
 
   const handleSwitchPortal = () => {
-    setUserRole(null);
+    setShowProfileModal(true);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) {}
+    localStorage.removeItem('road_guardian_token');
     sessionStorage.removeItem('road_guardian_role');
+    setIsAuthenticated(false);
+    setUser(null);
+    setUserRole(null);
+    setShowProfileModal(false);
+    setAuthParams({ action: null, token: null });
   };
 
   const getTabHeader = () => {
@@ -47,7 +152,7 @@ export default function App() {
       case 'detection':
         return {
           title: 'AI Hazard Perception & Computer Vision',
-          subtitle: 'Real-time pothole and road damage detection using PyTorch YOLOv8 with EXIF GPS Geotagging'
+          subtitle: 'Real-time pothole and road damage detection with EXIF GPS geotagging mapping'
         };
       case 'digital-twin':
         return {
@@ -76,10 +181,6 @@ export default function App() {
 
   const headerInfo = getTabHeader();
 
-  if (!userRole) {
-    return <PortalSelectionModal onSelectRole={handleSelectRole} />;
-  }
-
   const renderRestrictedAccessNotice = () => (
     <div className="glass-card" style={{ textAlign: 'center', padding: '48px 24px', maxWidth: '560px', margin: '40px auto' }}>
       <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
@@ -99,6 +200,32 @@ export default function App() {
     </div>
   );
 
+  if (isAuthLoading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '16px', background: '#09090b' }}>
+        <Loader size={40} className="animate-spin" color="#00E6B4" />
+        <p style={{ color: '#a1a1aa', fontFamily: 'Space Grotesk, sans-serif', fontSize: '0.9rem', letterSpacing: '0.5px' }}>
+          Verifying Encrypted Session...
+        </p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || authParams.action) {
+    return (
+      <AuthPortal 
+        initialAction={authParams.action} 
+        initialToken={authParams.token} 
+        onAuthSuccess={(userData) => {
+          setUser(userData);
+          setIsAuthenticated(true);
+          setUserRole(userData.role);
+          setAuthParams({ action: null, token: null });
+        }} 
+      />
+    );
+  }
+
   return (
     <div className="app-container">
       <Sidebar 
@@ -114,6 +241,7 @@ export default function App() {
           subtitle={headerInfo.subtitle} 
           summaryStats={summaryStats} 
           userRole={userRole}
+          user={user}
           onSwitchPortal={handleSwitchPortal}
         />
 
@@ -122,7 +250,7 @@ export default function App() {
           <div className="stat-card">
             <div>
               <div className="stat-label">Scanned Segments</div>
-              <div className="stat-val">{summaryStats?.total_scanned || 142}</div>
+              <div className="stat-val">{summaryStats?.total_scanned !== undefined ? summaryStats.total_scanned : 142}</div>
               <div style={{ fontSize: '0.72rem', color: '#00E6B4', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '2px' }}>
                 <ArrowUpRight size={12} /> +14.2% from last week
               </div>
@@ -135,7 +263,7 @@ export default function App() {
           <div className="stat-card">
             <div>
               <div className="stat-label">Critical Potholes</div>
-              <div className="stat-val" style={{ color: '#EF4444' }}>{summaryStats?.critical_potholes || 18}</div>
+              <div className="stat-val" style={{ color: '#EF4444' }}>{summaryStats?.critical_potholes !== undefined ? summaryStats.critical_potholes : 18}</div>
               <div style={{ fontSize: '0.72rem', color: '#EF4444', marginTop: '4px' }}>
                 Action Required
               </div>
@@ -148,9 +276,9 @@ export default function App() {
           <div className="stat-card">
             <div>
               <div className="stat-label">City Risk Score</div>
-              <div className="stat-val" style={{ color: '#F59E0B' }}>{summaryStats?.active_road_risk_score || 68.4}</div>
+              <div className="stat-val" style={{ color: '#F59E0B' }}>{summaryStats?.active_road_risk_score !== undefined ? summaryStats.active_road_risk_score : 68.4}</div>
               <div style={{ fontSize: '0.72rem', color: '#F59E0B', marginTop: '4px' }}>
-                High Risk Level
+                Risk Level
               </div>
             </div>
             <div className="stat-icon-wrapper" style={{ background: 'rgba(245,158,11,0.1)' }}>
@@ -161,7 +289,7 @@ export default function App() {
           <div className="stat-card">
             <div>
               <div className="stat-label">Digital Twin Nodes</div>
-              <div className="stat-val" style={{ color: '#38BDF8' }}>{summaryStats?.digital_twin_nodes || 6}</div>
+              <div className="stat-val" style={{ color: '#38BDF8' }}>{summaryStats?.digital_twin_nodes !== undefined ? summaryStats.digital_twin_nodes : 6}</div>
               <div style={{ fontSize: '0.72rem', color: '#38BDF8', marginTop: '4px' }}>
                 Live Spatial Stream
               </div>
@@ -179,6 +307,18 @@ export default function App() {
         {activeTab === 'risk-calculator' && (userRole === 'admin' ? <RiskCalculatorView /> : renderRestrictedAccessNotice())}
         {activeTab === 'municipal-report' && (userRole === 'admin' ? <ReportGeneratorView /> : renderRestrictedAccessNotice())}
       </div>
+
+      {showProfileModal && (
+        <UserProfileModal 
+          user={user}
+          onClose={() => setShowProfileModal(false)}
+          onLogout={handleLogout}
+          onUpgradeSuccess={(updatedUser) => {
+            setUser(updatedUser);
+            setUserRole(updatedUser.role);
+          }}
+        />
+      )}
     </div>
   );
 }

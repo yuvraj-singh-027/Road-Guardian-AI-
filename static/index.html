@@ -194,11 +194,11 @@
             <div class="flex justify-between items-center">
                 <div>
                     <h2 class="text-2xl font-bold text-slate-100">Layer 3 — Digital Twin 3D Spatial Map</h2>
-                    <p class="text-xs text-slate-400">Interactive WebGL Leaflet map categorizing city road segments into risk status tiers.</p>
+                    <p class="text-xs text-slate-400">Interactive spatial road map categorizing city road segments into risk status tiers.</p>
                 </div>
                 <div class="flex items-center gap-2">
                     <button onclick="loadLeafletMap('grid')" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700">Grid Twin</button>
-                    <button onclick="loadLeafletMap('osm')" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg">Live OpenStreetMap</button>
+                    <button onclick="loadLeafletMap('osm')" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg">Live Standard Map</button>
                     <button id="toggle-roads-btn" onclick="toggleRoadNetworkVisibility()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5">
                         <i class="fa-solid fa-road"></i> <span id="toggle-roads-text">Show Repair Lines</span>
                     </button>
@@ -673,7 +673,7 @@
                 maptilersdk.config.apiKey = 'EoWexBznkKn3ph7oAKfn';
                 leafletMapObj = new maptilersdk.Map({
                     container: 'leaflet-map',
-                    style: maptilersdk.MapStyle.DARK_MATTER,
+                    style: maptilersdk.MapStyle.DATAVIZ.DARK,
                     center: [77.2090, 28.6139],
                     zoom: 13,
                     terrain: true

@@ -11,3 +11,7 @@ reportlab
 fpdf2
 pymysql
 requests
+pyjwt
+email-validator
+
+

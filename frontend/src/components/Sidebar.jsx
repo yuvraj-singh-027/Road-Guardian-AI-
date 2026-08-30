@@ -1,10 +1,10 @@
 import React from 'react';
-import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, RefreshCw, Lock, Users, ChevronRight, Layers } from 'lucide-react';
+import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, RefreshCw, Lock, Users, User, ChevronRight, Layers } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPortal }) {
   const allNavItems = [
-    { id: 'detection', label: 'AI Hazard Perception', icon: Camera, publicAccess: true, badge: 'YOLOv8' },
-    { id: 'digital-twin', label: 'Digital Twin City Map', icon: Map, publicAccess: true, badge: '3D GIS' },
+    { id: 'detection', label: 'AI Hazard Perception', icon: Camera, publicAccess: true, badge: 'AI Vision' },
+    { id: 'digital-twin', label: 'Digital Twin City Map', icon: Map, publicAccess: true, badge: 'Spatial' },
     { id: 'traffic-reroute', label: 'Traffic Simulator', icon: Cpu, publicAccess: false, badge: 'Layer 4' },
     { id: 'risk-calculator', label: 'Risk Engine Evaluator', icon: ShieldAlert, publicAccess: false, badge: 'Layer 2' },
     { id: 'municipal-report', label: 'Audit PDF Generator', icon: FileText, publicAccess: false, badge: 'Export' },
@@ -45,9 +45,9 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
             <button 
               onClick={onSwitchPortal}
               style={{ background: 'transparent', border: 'none', color: '#71717a', cursor: 'pointer', padding: '4px' }}
-              title="Switch Access Portal"
+              title="View Account Profile"
             >
-              <RefreshCw size={14} />
+              <User size={14} />
             </button>
           </div>
         </div>
@@ -81,7 +81,7 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
 
         {/* Public Teaser Box */}
         {userRole === 'public' && (
-          <div className="public-teaser-box" onClick={onSwitchPortal}>
+          <div className="public-teaser-box" onClick={onSwitchPortal} style={{ cursor: 'pointer' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#F59E0B', fontWeight: 600, fontSize: '0.78rem' }}>
               <Lock size={14} /> Authority Tools Locked
             </div>
@@ -95,14 +95,14 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
       <div className="sidebar-footer">
         <button 
           className="btn-secondary" 
-          style={{ width: '100%', padding: '8px 12px', fontSize: '0.78rem', justifyContent: 'center' }}
+          style={{ width: '100%', padding: '8px 12px', fontSize: '0.78rem', justifyContent: 'center', gap: '6px' }}
           onClick={onSwitchPortal}
         >
-          <RefreshCw size={14} /> Switch Access Portal
+          <User size={14} /> Account Settings
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: '#71717a' }}>
           <div className="status-dot"></div>
-          <span>FastAPI + PyTorch YOLOv8</span>
+          <span>System Engine Online</span>
         </div>
       </div>
     </aside>

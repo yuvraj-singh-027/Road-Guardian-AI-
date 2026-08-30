@@ -179,7 +179,7 @@ export default function ReportGeneratorView() {
       }, 100);
     } catch (err) {
       console.error(err);
-      alert('Failed to generate PDF report. Please ensure FastAPI backend is running at http://localhost:8000');
+      alert('Failed to generate PDF report. Please ensure backend server is running.');
     } finally {
       setIsGenerating(false);
     }
@@ -214,7 +214,7 @@ export default function ReportGeneratorView() {
       setTransmissionReceipt(receipt);
     } catch (err) {
       console.error(err);
-      alert('Transmission failed. Ensure FastAPI backend is running at http://localhost:8000');
+      alert('Transmission failed. Ensure backend server is running.');
     } finally {
       setIsTransmitting(false);
     }
@@ -354,24 +354,44 @@ export default function ReportGeneratorView() {
           </div>
 
           {/* Audit Donut Chart */}
-          <div style={{ height: '170px', width: '100%', marginBottom: '12px' }}>
+          <div style={{ position: 'relative', height: '170px', width: '100%', marginBottom: '12px' }}>
+            <div style={{ position: 'absolute', top: '44%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', lineHeight: 1 }}>142</div>
+              <div style={{ fontSize: '0.62rem', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '3px' }}>Total Scans</div>
+            </div>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={auditDistribution}
                   cx="50%"
                   cy="50%"
-                  innerRadius={45}
-                  outerRadius={65}
-                  paddingAngle={4}
+                  innerRadius={48}
+                  outerRadius={66}
+                  paddingAngle={3}
                   dataKey="value"
                 >
                   {auditDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} stroke="#09090b" strokeWidth={2} />
+                    <Cell key={`cell-${index}`} fill={entry.color} stroke="#09090b" strokeWidth={1.5} />
                   ))}
                 </Pie>
                 <Tooltip 
-                  contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fff', fontSize: '0.8rem' }}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div style={{ background: '#09090b', border: '1px solid #27272a', borderRadius: '8px', padding: '8px 12px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: data.color }} />
+                            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fff' }}>{data.name}</span>
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#a1a1aa' }}>
+                            Count: <b style={{ color: '#fff' }}>{data.value}</b>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
                 />
                 <Legend 
                   iconType="circle" 

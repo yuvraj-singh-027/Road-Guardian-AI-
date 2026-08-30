@@ -204,16 +204,12 @@ export default function AIDetectionView() {
       }
 
       const data = await response.json().catch(() => null);
-
-      if (!response.ok || (data && data.is_fake)) {
-        if (data && (data.is_fake || data.error_type === "AUTHENTICITY_REJECTED")) {
-          setFakeImageWarning(data);
-          setDetectionResult(null);
-          return;
-        }
+ 
+      if (!response.ok) {
         throw new Error(`API Error: ${data?.detail || response.statusText || 'Server Error'}`);
       }
-
+ 
+      setFakeImageWarning(null);
       setDetectionResult(data);
       fetchHistory();
     } catch (err) {
@@ -651,24 +647,46 @@ export default function AIDetectionView() {
             <span style={{ fontSize: '0.72rem', color: '#71717a' }}>City Analytics</span>
           </div>
 
-          <div style={{ height: '210px', width: '100%' }}>
+          <div style={{ position: 'relative', height: '210px', width: '100%' }}>
+            <div style={{ position: 'absolute', top: '39%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', pointerEvents: 'none' }}>
+              <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#fff', lineHeight: 1 }}>
+                {severityDistribution.reduce((acc, curr) => acc + curr.value, 0)}
+              </div>
+              <div style={{ fontSize: '0.62rem', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '3px' }}>Hazards</div>
+            </div>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={severityDistribution}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={75}
-                  paddingAngle={5}
+                  innerRadius={54}
+                  outerRadius={74}
+                  paddingAngle={4}
                   dataKey="value"
                 >
                   {severityDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} stroke="#09090b" strokeWidth={2} />
+                    <Cell key={`cell-${index}`} fill={entry.color} stroke="#09090b" strokeWidth={1.5} />
                   ))}
                 </Pie>
                 <Tooltip 
-                  contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fff', fontSize: '0.8rem' }}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div style={{ background: '#09090b', border: '1px solid #27272a', borderRadius: '8px', padding: '8px 12px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: data.color }} />
+                            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#fff' }}>{data.name}</span>
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#a1a1aa' }}>
+                            Count: <b style={{ color: '#fff' }}>{data.value}</b>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
                 />
                 <Legend 
                   iconType="circle" 
@@ -694,11 +712,27 @@ export default function AIDetectionView() {
                 <XAxis dataKey="name" stroke="#71717a" fontSize={11} tickLine={false} />
                 <YAxis stroke="#71717a" fontSize={11} tickLine={false} domain={[0, 100]} />
                 <Tooltip 
-                  contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fff', fontSize: '0.8rem' }}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div style={{ background: '#09090b', border: '1px solid #27272a', borderRadius: '8px', padding: '8px 12px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', fontSize: '0.78rem' }}>
+                          <div style={{ color: '#fff', fontWeight: 600, marginBottom: '6px' }}>{payload[0].payload.name}</div>
+                          {payload.map((p, idx) => (
+                            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: p.color }} />
+                              <span style={{ color: '#a1a1aa' }}>{p.name}:</span>
+                              <span style={{ color: '#fff', fontWeight: 600 }}>{p.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
                 />
                 <Legend wrapperStyle={{ fontSize: '0.75rem', color: '#a1a1aa' }} />
-                <Bar dataKey="confidence" name="YOLO Conf (%)" fill="#00E6B4" radius={[4, 4, 0, 0]} barSize={20} />
-                <Bar dataKey="risk" name="Risk Score (/100)" fill="#F59E0B" radius={[4, 4, 0, 0]} barSize={20} />
+                <Bar dataKey="confidence" name="Confidence (%)" fill="#00E6B4" radius={[4, 4, 0, 0]} barSize={16} />
+                <Bar dataKey="risk" name="Risk Score (/100)" fill="#F59E0B" radius={[4, 4, 0, 0]} barSize={16} />
               </BarChart>
             </ResponsiveContainer>
           </div>

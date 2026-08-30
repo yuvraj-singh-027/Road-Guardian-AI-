@@ -149,12 +149,28 @@ export default function TrafficRerouteView() {
               <XAxis dataKey="name" stroke="#71717a" fontSize={11} tickLine={false} />
               <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
               <Tooltip 
-                contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fff', fontSize: '0.8rem' }}
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div style={{ background: '#09090b', border: '1px solid #27272a', borderRadius: '8px', padding: '8px 12px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', fontSize: '0.78rem' }}>
+                        <div style={{ color: '#fff', fontWeight: 600, marginBottom: '6px' }}>{payload[0].payload.fullName || payload[0].payload.name}</div>
+                        {payload.map((p, idx) => (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: p.color || p.fill }} />
+                            <span style={{ color: '#a1a1aa' }}>{p.name}:</span>
+                            <span style={{ color: '#fff', fontWeight: 600 }}>{p.value} veh/hr</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
               />
               <Legend wrapperStyle={{ fontSize: '0.75rem', color: '#a1a1aa' }} />
-              <Bar dataKey="original" name="Original Base Traffic" fill="#38BDF8" radius={[4, 4, 0, 0]} barSize={16} />
-              <Bar dataKey="rerouted" name="Simulated Rerouted Traffic" fill="#F59E0B" radius={[4, 4, 0, 0]} barSize={16} />
-              <Bar dataKey="capacity" name="Max Road Capacity" fill="#27272a" radius={[4, 4, 0, 0]} barSize={16} />
+              <Bar dataKey="original" name="Original Volume" fill="#38BDF8" radius={[4, 4, 0, 0]} barSize={12} />
+              <Bar dataKey="rerouted" name="Simulated Rerouted" fill="#F59E0B" radius={[4, 4, 0, 0]} barSize={12} />
+              <Bar dataKey="capacity" name="Max Capacity" fill="#27272a" radius={[4, 4, 0, 0]} barSize={12} />
             </BarChart>
           </ResponsiveContainer>
         </div>

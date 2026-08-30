@@ -4,6 +4,7 @@ import io
 import cv2
 import base64
 import datetime
+import time
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 from PIL import Image, ExifTags
@@ -24,8 +25,18 @@ try:
     from .report_generator import generate_pdf_report
     from .authenticity_engine import analyze_photo_authenticity
     from .db_manager import clear_all_detections, get_db_status, get_all_detections
+    from .auth import router as auth_router, get_current_user
 except ImportError as e:
-    raise RuntimeError(f"Failed to import core engines: {e}")
+    try:
+        from risk_engine import calculate_road_risk
+        from traffic_engine import get_default_city_network, simulate_traffic_rerouting
+        from report_generator import generate_pdf_report
+        from authenticity_engine import analyze_photo_authenticity
+        from db_manager import clear_all_detections, get_db_status, get_all_detections
+        from auth import router as auth_router, get_current_user
+    except Exception:
+        raise RuntimeError(f"Failed to import core engines: {e}")
+
 
 # Try importing Ultralytics YOLO
 YOLO_MODEL = None
@@ -56,6 +67,15 @@ app = FastAPI(
     description="FastAPI Backend for Real-Time Road Health Monitoring & Digital Twin System",
     version="2.0.0"
 )
+
+# Mount the auth router containing login, signup, etc.
+app.include_router(auth_router)
+
+from fastapi import Depends
+def require_admin(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Authority Admin credentials required.")
+    return current_user
 
 # Enable CORS for React Frontend
 app.add_middleware(
@@ -259,12 +279,27 @@ async def report_hazard_endpoint(
     longitude: Optional[float] = Form(None),
     address: Optional[str] = Form(None),
     severity: Optional[str] = Form("High"),
-    confidence: Optional[float] = Form(0.88)
+    confidence: Optional[float] = Form(0.88),
+    current_user: dict = Depends(get_current_user)
 ):
     lat = latitude if latitude is not None else 28.6139
     lon = longitude if longitude is not None else 77.2090
     resolved_addr = address or reverse_geocode_coords(lat, lon)
     
+    # Save the manual hazard report to the database
+    try:
+        from .db_manager import insert_detection
+        insert_detection(
+            image_name=image_name or "report_manual.jpg",
+            latitude=str(lat),
+            longitude=str(lon),
+            severity=severity or "High",
+            confidence=confidence or 0.88,
+            user_id=current_user["id"]
+        )
+    except Exception as e:
+        print(f"[Manual Report DB Sync Error]: {e}")
+        
     return {
         "success": True,
         "message": f"Hazard successfully registered at '{resolved_addr}'",
@@ -275,20 +310,21 @@ async def report_hazard_endpoint(
         "report_id": f"REP-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
     }
 
-@app.get("/api/stats/summary")
-def get_dashboard_summary():
+
+def get_dashboard_summary(current_user: dict):
     weather_info = fetch_live_weather(28.6139, 77.2090)
     try:
-        df = get_all_detections()
+        user_id = current_user["id"] if current_user.get("role") == "public" else None
+        df = get_all_detections(user_id=user_id)
         db_stat = get_db_status()
         
-        total_scanned = len(df) if not df.empty else 142
-        critical_count = len(df[df['Severity'] == 'Critical']) if not df.empty else 18
+        total_scanned = len(df) if not df.empty else 0
+        critical_count = len(df[df['Severity'] == 'Critical']) if not df.empty else 0
         
         # Calculate average risk score
-        avg_risk = float(df['Risk_Score'].mean()) if not df.empty else 68.4
+        avg_risk = float(df['Risk_Score'].mean()) if not df.empty else 0.0
         if math.isnan(avg_risk):
-            avg_risk = 68.4
+            avg_risk = 0.0
             
     except Exception as e:
         print(f"[Stats Fallback Error]: {e}")
@@ -300,7 +336,7 @@ def get_dashboard_summary():
     return {
         "total_scanned": total_scanned,
         "critical_potholes": critical_count,
-        "active_road_risk_score": round(avg_risk, 1),
+        "active_road_risk_score": round(avg_risk, 1) if avg_risk > 0 else 0,
         "digital_twin_nodes": 6,
         "system_status": "Operational",
         "weather_condition": weather_info.get("condition", "Clear"),
@@ -309,9 +345,13 @@ def get_dashboard_summary():
         "db_status": db_stat
     }
 
+@app.get("/api/stats/summary")
+def get_stats_summary_endpoint(current_user: dict = Depends(get_current_user)):
+    return get_dashboard_summary(current_user)
+
 @app.get("/api/overview")
-def get_overview_endpoint():
-    summary = get_dashboard_summary()
+def get_overview_endpoint(current_user: dict = Depends(get_current_user)):
+    summary = get_dashboard_summary(current_user)
     
     # Add backward compatibility keys for static HTML portal
     summary["total_hazards"] = summary["total_scanned"]
@@ -320,7 +360,8 @@ def get_overview_endpoint():
     summary["critical_segments_count"] = summary["critical_potholes"]
     
     try:
-        df = get_all_detections()
+        user_id = current_user["id"] if current_user.get("role") == "public" else None
+        df = get_all_detections(user_id=user_id)
         if not df.empty:
             recent_list = []
             for idx, r in df.head(6).iterrows():
@@ -344,12 +385,7 @@ def get_overview_endpoint():
         else:
             raise ValueError("No records in DB")
     except Exception:
-        summary["recent_detections"] = [
-            { "id": 101, "Image": "pothole_kasturba_gandhi.jpg", "Landmark": "Kasturba Gandhi Marg", "Severity": "High", "Confidence": 0.89, "Risk_Badge": "🔴 Critical", "Time": "10:14 AM" },
-            { "id": 102, "Image": "pothole_barakhamba.jpg", "Landmark": "Barakhamba Road", "Severity": "Medium", "Confidence": 0.76, "Risk_Badge": "🟠 High Risk", "Time": "09:30 AM" },
-            { "id": 103, "Image": "pothole_rajiv_chowk.jpg", "Landmark": "Rajiv Chowk Gate 3", "Severity": "Critical", "Confidence": 0.94, "Risk_Badge": "🔴 Critical", "Time": "06:45 PM" },
-            { "id": 104, "Image": "pothole_connaught_place.jpg", "Landmark": "Connaught Inner Circle", "Severity": "Low", "Confidence": 0.65, "Risk_Badge": "🟡 Degraded", "Time": "02:10 PM" }
-        ]
+        summary["recent_detections"] = []
     return summary
 
 @app.post("/api/admin/verify")
@@ -360,7 +396,7 @@ def verify_admin_passcode(req: AdminVerifyRequest):
     return JSONResponse(status_code=401, content={"success": False, "message": "Invalid Passcode"})
 
 @app.post("/api/risk/calculate")
-def calculate_risk_endpoint(req: RiskCalculationRequest):
+def calculate_risk_endpoint(req: RiskCalculationRequest, current_user: dict = Depends(get_current_user)):
     res = calculate_road_risk(
         severity=req.severity,
         confidence=req.confidence,
@@ -374,7 +410,7 @@ def calculate_risk_endpoint(req: RiskCalculationRequest):
     return res
 
 @app.get("/api/traffic/network")
-def get_traffic_network(center_lat: float = Query(28.6139), center_lon: float = Query(77.2090)):
+def get_traffic_network(center_lat: float = Query(28.6139), center_lon: float = Query(77.2090), current_user: dict = Depends(get_current_user)):
     network = get_default_city_network(center_lat=center_lat, center_lon=center_lon)
     return {
         "center": [center_lat, center_lon],
@@ -383,7 +419,7 @@ def get_traffic_network(center_lat: float = Query(28.6139), center_lon: float = 
     }
 
 @app.post("/api/traffic/reroute")
-def reroute_traffic_endpoint(req: TrafficRerouteRequest):
+def reroute_traffic_endpoint(req: TrafficRerouteRequest, current_user: dict = Depends(require_admin)):
     network = get_default_city_network(center_lat=req.center_lat, center_lon=req.center_lon)
     sim_result = simulate_traffic_rerouting(network, req.closed_road_id)
     return sim_result
@@ -393,7 +429,8 @@ async def detect_image(
     file: UploadFile = File(...),
     manual_lat: Optional[float] = Form(None),
     manual_lon: Optional[float] = Form(None),
-    landmark_name: Optional[str] = Form(None)
+    landmark_name: Optional[str] = Form(None),
+    current_user: dict = Depends(get_current_user)
 ):
     is_image_mime = file.content_type and file.content_type.startswith("image/")
     is_image_ext = file.filename and file.filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".bmp"))
@@ -557,7 +594,8 @@ async def detect_image(
             longitude=str(lon),
             severity=highest_severity,
             confidence=max_conf,
-            time_val=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            time_val=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            user_id=current_user["id"]
         )
         print(f"[DB AUTO-INSERT LOG]: {msg}")
     except Exception as dberr:
@@ -596,7 +634,7 @@ async def analyze_authenticity_endpoint(file: UploadFile = File(...)):
 
 
 @app.post("/api/report/pdf")
-def generate_pdf_endpoint(req: PDFReportRequest):
+def generate_pdf_endpoint(req: PDFReportRequest, current_user: dict = Depends(require_admin)):
     detections_summary = req.detections_summary or {
         "total_scanned": 142,
         "total_potholes": 39,
@@ -640,7 +678,7 @@ def generate_pdf_endpoint(req: PDFReportRequest):
     )
 
 @app.post("/api/report/transmit")
-def transmit_report_endpoint(req: TransmitReportRequest):
+def transmit_report_endpoint(req: TransmitReportRequest, current_user: dict = Depends(require_admin)):
     pdf_bytes = generate_pdf_report(
         detections_summary=req.detections_summary or {
             "total_scanned": 142,
@@ -734,9 +772,10 @@ def generate_pdf_compat(department: str = Form("Regional Infrastructure Authorit
     )
 
 @app.get("/api/detections")
-def get_all_detections_endpoint():
+def get_all_detections_endpoint(current_user: dict = Depends(get_current_user)):
     try:
-        df = get_all_detections()
+        user_id = current_user["id"] if current_user.get("role") == "public" else None
+        df = get_all_detections(user_id=user_id)
         if not df.empty:
             records = []
             for idx, r in df.iterrows():
@@ -757,7 +796,7 @@ def get_all_detections_endpoint():
     return {"success": True, "detections": []}
 
 @app.get("/api/gallery")
-def get_gallery_images():
+def get_gallery_images(current_user: dict = Depends(get_current_user)):
     folder_path = BASE_DIR / "potholes"
     if not folder_path.exists():
         return {"images": []}
@@ -768,7 +807,7 @@ class ClearDBRequest(BaseModel):
     passcode: str
 
 @app.post("/api/admin/clear-db")
-def clear_db_compat(req: ClearDBRequest):
+def clear_db_compat(req: ClearDBRequest, current_user: dict = Depends(require_admin)):
     valid_passcodes = {"Admin@RoadGuardian2026", "admin123", "admin"}
     if req.passcode not in valid_passcodes:
         raise HTTPException(status_code=401, detail="Invalid admin passcode.")

@@ -5,6 +5,20 @@ spatial & temporal hazard deduplication, and automatic CSV migration.
 """
 
 import os
+from pathlib import Path
+
+# Manually load .env file into os.environ if it exists
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    with open(_env_path, "r", encoding="utf-8") as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if not _line or _line.startswith("#"):
+                continue
+            if "=" in _line:
+                _key, _val = _line.split("=", 1)
+                os.environ[_key.strip()] = _val.strip()
+
 import sqlite3
 import math
 import hashlib
@@ -91,7 +105,7 @@ def get_db_connection():
 _DB_INITIALIZED = False
 
 def init_db():
-    """Initializes the pothole_detections table schema if it does not exist."""
+    """Initializes the users and pothole_detections table schemas if they do not exist."""
     global _DB_INITIALIZED
     if _DB_INITIALIZED:
         return
@@ -101,6 +115,22 @@ def init_db():
     try:
         if db_type == "mysql":
             with conn.cursor() as cursor:
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    email VARCHAR(255) UNIQUE NOT NULL,
+                    password_hash VARCHAR(255),
+                    is_verified TINYINT DEFAULT 0,
+                    verification_token VARCHAR(255),
+                    reset_token VARCHAR(255),
+                    reset_token_expires DATETIME,
+                    google_id VARCHAR(255) UNIQUE,
+                    profile_picture VARCHAR(500),
+                    role VARCHAR(50) DEFAULT 'public',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                """)
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS pothole_detections (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -114,11 +144,33 @@ def init_db():
                     lon_numeric DOUBLE,
                     risk_score DOUBLE,
                     image_hash VARCHAR(64),
+                    user_id INT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 """)
+                # Try adding user_id dynamically if column is missing on existing table
+                try:
+                    cursor.execute("SELECT user_id FROM pothole_detections LIMIT 1")
+                except Exception:
+                    cursor.execute("ALTER TABLE pothole_detections ADD COLUMN user_id INT NULL")
         else: # SQLite
             with conn:
+                conn.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    email TEXT UNIQUE NOT NULL,
+                    password_hash TEXT,
+                    is_verified INTEGER DEFAULT 0,
+                    verification_token TEXT,
+                    reset_token TEXT,
+                    reset_token_expires TEXT,
+                    google_id TEXT UNIQUE,
+                    profile_picture TEXT,
+                    role TEXT DEFAULT 'public',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                """)
                 conn.execute("""
                 CREATE TABLE IF NOT EXISTS pothole_detections (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -132,9 +184,15 @@ def init_db():
                     lon_numeric REAL,
                     risk_score REAL,
                     image_hash TEXT,
+                    user_id INTEGER NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 """)
+                # Try adding user_id dynamically if column is missing on existing table
+                try:
+                    conn.execute("SELECT user_id FROM pothole_detections LIMIT 1")
+                except Exception:
+                    conn.execute("ALTER TABLE pothole_detections ADD COLUMN user_id INTEGER")
     finally:
         conn.close()
     
@@ -240,7 +298,8 @@ def insert_detection(
     confidence: float,
     time_val: Any = None,
     image_bytes_or_path: Any = None,
-    skip_dedup: bool = False
+    skip_dedup: bool = False,
+    user_id: Optional[int] = None
 ) -> Tuple[bool, str]:
     """
     Inserts a new pothole detection record into the database after deduplication checks.
@@ -285,16 +344,16 @@ def insert_detection(
             with conn.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO pothole_detections 
-                    (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, risk_score, image_hash)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, risk_score, img_hash))
+                    (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, risk_score, image_hash, user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, risk_score, img_hash, user_id))
         else: # sqlite
             with conn:
                 conn.execute("""
                     INSERT INTO pothole_detections 
-                    (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, risk_score, image_hash)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, risk_score, img_hash))
+                    (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, risk_score, image_hash, user_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, risk_score, img_hash, user_id))
         return True, f"Successfully logged detection '{image_name}' to {db_type.upper()} database."
     except Exception as e:
         return False, f"Database insertion error: {e}"
@@ -302,7 +361,7 @@ def insert_detection(
         conn.close()
 
 
-def get_all_detections() -> pd.DataFrame:
+def get_all_detections(user_id: Optional[int] = None) -> pd.DataFrame:
     """
     Fetches all detection records from the database as a pandas DataFrame.
     Calculates dynamic risk status, badges, and formats columns expected by dash.py.
@@ -312,11 +371,17 @@ def get_all_detections() -> pd.DataFrame:
     try:
         if db_type == "mysql":
             with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM pothole_detections ORDER BY id DESC")
+                if user_id is not None:
+                    cursor.execute("SELECT * FROM pothole_detections WHERE user_id = %s ORDER BY id DESC", (user_id,))
+                else:
+                    cursor.execute("SELECT * FROM pothole_detections ORDER BY id DESC")
                 rows = cursor.fetchall()
             df = pd.DataFrame(rows)
         else:
-            df = pd.read_sql_query("SELECT * FROM pothole_detections ORDER BY id DESC", conn)
+            if user_id is not None:
+                df = pd.read_sql_query("SELECT * FROM pothole_detections WHERE user_id = ? ORDER BY id DESC", conn, params=[user_id])
+            else:
+                df = pd.read_sql_query("SELECT * FROM pothole_detections ORDER BY id DESC", conn)
 
         if df.empty:
             return pd.DataFrame(columns=["id", "Image", "Latitude", "Longitude", "Severity", "Confidence", "Time", "lat_numeric", "lon_numeric", "Risk_Score", "Risk_Status", "Risk_Badge"])
@@ -549,6 +614,13 @@ def get_db_status() -> Dict[str, Any]:
         }
     finally:
         conn.close()
+
+
+# Auto-initialize database schema on module import
+try:
+    init_db()
+except Exception as e:
+    print(f"[DB AUTO-INIT WARNING]: {e}")
 
 
 if __name__ == "__main__":

@@ -6,3 +6,7 @@ frontend/dist/
 frontend/.vite/
 .DS_Store
 *.db
+
+.env
+potholes/
+

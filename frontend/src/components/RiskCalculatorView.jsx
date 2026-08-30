@@ -203,9 +203,24 @@ export default function RiskCalculatorView() {
                       <XAxis type="number" stroke="#71717a" fontSize={10} tickLine={false} domain={[0, 35]} />
                       <YAxis type="category" dataKey="factor" stroke="#71717a" fontSize={10} tickLine={false} width={110} />
                       <Tooltip 
-                        contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fff', fontSize: '0.8rem' }}
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div style={{ background: '#09090b', border: '1px solid #27272a', borderRadius: '8px', padding: '8px 12px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', fontSize: '0.78rem' }}>
+                                <div style={{ color: '#fff', fontWeight: 600 }}>{data.factor}</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#00E6B4' }} />
+                                  <span style={{ color: '#a1a1aa' }}>Risk Points:</span>
+                                  <span style={{ color: '#00E6B4', fontWeight: 600 }}>+{data.points} pts</span>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
                       />
-                      <Bar dataKey="points" name="Risk Weight (+pts)" fill="#00E6B4" radius={[0, 4, 4, 0]} barSize={12} />
+                      <Bar dataKey="points" name="Risk Weight (+pts)" fill="#00E6B4" radius={[0, 4, 4, 0]} barSize={10} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
