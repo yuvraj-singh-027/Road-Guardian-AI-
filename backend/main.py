@@ -77,14 +77,38 @@ def require_admin(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Authority Admin credentials required.")
     return current_user
 
+# Manually load .env file into os.environ if it exists
+_env_path = BASE_DIR / ".env"
+if _env_path.exists():
+    with open(_env_path, "r", encoding="utf-8") as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ[_k.strip()] = _v.strip()
+
 # Enable CORS for React Frontend
+cors_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url:
+    for url in frontend_url.split(","):
+        url = url.strip()
+        if url and url not in cors_origins:
+            cors_origins.append(url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # --- Pydantic Data Models ---
 class RiskCalculationRequest(BaseModel):
