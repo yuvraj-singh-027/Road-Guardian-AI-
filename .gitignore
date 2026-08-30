@@ -10,3 +10,6 @@ frontend/.vite/
 .env
 potholes/
 
+
+*.csv
+
