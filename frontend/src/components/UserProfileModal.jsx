@@ -186,14 +186,6 @@ export default function UserProfileModal({ user, onClose, onLogout, onUpgradeSuc
           >
             Close
           </button>
-          
-          <button 
-            className="btn-primary"
-            onClick={onLogout}
-            style={{ flex: 1, background: '#EF4444', boxShadow: 'none', color: '#fff', justifyContent: 'center' }}
-          >
-            <LogOut size={15} /> Log Out
-          </button>
         </div>
 
       </div>

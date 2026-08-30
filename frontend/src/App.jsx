@@ -7,7 +7,6 @@ import DigitalTwinMapView from './components/DigitalTwinMapView';
 import TrafficRerouteView from './components/TrafficRerouteView';
 import RiskCalculatorView from './components/RiskCalculatorView';
 import ReportGeneratorView from './components/ReportGeneratorView';
-import AuthPortal from './components/AuthPortal';
 import UserProfileModal from './components/UserProfileModal';
 import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, Lock, KeyRound, ArrowUpRight, Loader } from 'lucide-react';
 
@@ -38,80 +37,33 @@ if (typeof window !== 'undefined' && !window.__fetch_intercepted__) {
 }
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [user, setUser] = useState({
+    id: 1,
+    name: "Authority Admin",
+    email: "admin@roadguardian.ai",
+    role: "admin",
+    profile_picture: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100"
+  });
   const [showProfileModal, setShowProfileModal] = useState(false);
 
-  const [authParams, setAuthParams] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    const action = params.get('action');
-    const token = params.get('token');
-    return { action, token };
-  });
+  const [authParams, setAuthParams] = useState({ action: null, token: null });
 
-  const [userRole, setUserRole] = useState(() => {
-    return sessionStorage.getItem('road_guardian_role') || null;
-  });
+  const [userRole, setUserRole] = useState("admin");
 
   const [activeTab, setActiveTab] = useState('detection');
   const [summaryStats, setSummaryStats] = useState(null);
 
   // Sync auth state
   const checkAuth = async () => {
-    const token = localStorage.getItem('road_guardian_token');
-    if (!token) {
-      setIsAuthLoading(false);
-      setIsAuthenticated(false);
-      setUser(null);
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/auth/me');
-      if (res.ok) {
-        const data = await res.json();
-        setUser(data);
-        setIsAuthenticated(true);
-        setUserRole(data.role);
-        sessionStorage.setItem('road_guardian_role', data.role);
-        
-        // Auto set default tab based on role
-        setActiveTab(data.role === 'admin' ? 'digital-twin' : 'detection');
-      } else {
-        localStorage.removeItem('road_guardian_token');
-        sessionStorage.removeItem('road_guardian_role');
-        setIsAuthenticated(false);
-        setUser(null);
-      }
-    } catch (err) {
-      console.error('Auth verification error:', err);
-    } finally {
-      setIsAuthLoading(false);
-    }
+    setIsAuthLoading(false);
+    setIsAuthenticated(true);
+    setUserRole('admin');
   };
 
   useEffect(() => {
-    // 1. Check for incoming login token (e.g. from Google OAuth Redirect)
-    const params = new URLSearchParams(window.location.search);
-    const urlToken = params.get('token');
-    if (urlToken) {
-      localStorage.setItem('road_guardian_token', urlToken);
-      window.history.replaceState({}, document.title, window.location.pathname);
-      setAuthParams({ action: null, token: null });
-    }
-
     checkAuth();
-
-    // 2. Listen to global unauthorized event
-    const handleUnauthorized = () => {
-      setIsAuthenticated(false);
-      setUser(null);
-      setUserRole(null);
-    };
-
-    window.addEventListener('auth-unauthorized', handleUnauthorized);
-    return () => window.removeEventListener('auth-unauthorized', handleUnauthorized);
   }, []);
 
   // Fetch summary stats when authenticated
@@ -135,16 +87,7 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } catch (e) {}
-    localStorage.removeItem('road_guardian_token');
-    sessionStorage.removeItem('road_guardian_role');
-    setIsAuthenticated(false);
-    setUser(null);
-    setUserRole(null);
     setShowProfileModal(false);
-    setAuthParams({ action: null, token: null });
   };
 
   const getTabHeader = () => {
@@ -211,20 +154,7 @@ export default function App() {
     );
   }
 
-  if (!isAuthenticated || authParams.action) {
-    return (
-      <AuthPortal 
-        initialAction={authParams.action} 
-        initialToken={authParams.token} 
-        onAuthSuccess={(userData) => {
-          setUser(userData);
-          setIsAuthenticated(true);
-          setUserRole(userData.role);
-          setAuthParams({ action: null, token: null });
-        }} 
-      />
-    );
-  }
+
 
   return (
     <div className="app-container">

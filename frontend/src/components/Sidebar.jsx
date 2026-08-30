@@ -10,9 +10,7 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
     { id: 'municipal-report', label: 'Audit PDF Generator', icon: FileText, publicAccess: false, badge: 'Export' },
   ];
 
-  const navItems = userRole === 'public' 
-    ? allNavItems.filter(item => item.publicAccess)
-    : allNavItems.filter(item => item.id !== 'detection');
+  const navItems = allNavItems;
 
   return (
     <aside className="sidebar">
