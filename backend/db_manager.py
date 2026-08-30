@@ -38,8 +38,10 @@ BASE_DIR = os.path.dirname(BACKEND_DIR) # Root directory
 SQLITE_DB_PATH = os.path.join(BASE_DIR, "road_guardian.db")
 CSV_FILE_PATH = os.path.join(BASE_DIR, "pothole_data.csv")
 
-# Load backend modules for risk calculation
-from .risk_engine import calculate_road_risk
+try:
+    from .risk_engine import calculate_road_risk
+except ImportError:
+    from risk_engine import calculate_road_risk
 
 
 def get_db_connection():

@@ -17,6 +17,8 @@ from pydantic import BaseModel, Field
 
 # Ensure current directory is in python path for base configuration
 BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 import math
 try:
@@ -312,7 +314,10 @@ async def report_hazard_endpoint(
     
     # Save the manual hazard report to the database
     try:
-        from .db_manager import insert_detection
+        try:
+            from .db_manager import insert_detection
+        except ImportError:
+            from db_manager import insert_detection
         insert_detection(
             image_name=image_name or "report_manual.jpg",
             latitude=str(lat),
@@ -611,7 +616,10 @@ async def detect_image(
         cv2.imwrite(str(out_path), img_bgr)
         
         # Call database insert
-        from .db_manager import insert_detection
+        try:
+            from .db_manager import insert_detection
+        except ImportError:
+            from db_manager import insert_detection
         success, msg = insert_detection(
             image_name=out_filename,
             latitude=str(lat),

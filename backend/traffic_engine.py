@@ -10,7 +10,10 @@ when a road segment is closed for maintenance.
 import math
 import requests
 from typing import Dict, List, Any
-from .risk_engine import calculate_road_risk
+try:
+    from .risk_engine import calculate_road_risk
+except ImportError:
+    from risk_engine import calculate_road_risk
 
 def haversine_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculates real-world distance between two GPS coordinates in kilometers."""
@@ -417,7 +420,10 @@ def get_default_city_network(center_lat: float = 28.6139, center_lon: float = 77
 
     # Dynamic database matching logic
     try:
-        from .db_manager import get_all_detections
+        try:
+            from .db_manager import get_all_detections
+        except ImportError:
+            from db_manager import get_all_detections
         df = get_all_detections()
     except Exception:
         df = None
