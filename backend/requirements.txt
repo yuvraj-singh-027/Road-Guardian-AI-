@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+opencv-python-headless
+ultralytics
+pillow
+pandas
+numpy
+pydeck
+geocoder
+reportlab
+fpdf2
+pymysql
+requests
+pyjwt
+email-validator
+
+
