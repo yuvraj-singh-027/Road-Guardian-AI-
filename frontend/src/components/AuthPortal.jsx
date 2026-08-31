@@ -262,8 +262,12 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
   const handleGoogleRedirect = async () => {
     setErrorMsg('');
     try {
+      const baseUrl = import.meta.env.VITE_API_URL || 
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+          ? 'http://localhost:8000' 
+          : 'https://road-guardian-ai-5.onrender.com');
       // Direct redirect to backend endpoint
-      window.location.href = '/api/auth/google/login';
+      window.location.href = `${baseUrl}/api/auth/google/login`;
     } catch (err) {
       setErrorMsg('Google Login failed.');
     }
@@ -278,8 +282,12 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
       if (res.ok) {
         const data = await res.json();
         if (data.configured) {
+          const baseUrl = import.meta.env.VITE_API_URL || 
+            (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+              ? 'http://localhost:8000' 
+              : 'https://road-guardian-ai-5.onrender.com');
           // Direct browser navigation to start the OAuth redirect safely
-          window.location.href = '/api/auth/google/login';
+          window.location.href = `${baseUrl}/api/auth/google/login`;
           return;
         }
       }
