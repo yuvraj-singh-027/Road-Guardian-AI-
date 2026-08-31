@@ -856,5 +856,10 @@ if static_path.exists():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    import os
+    # Bind to PORT env var (Render default) or fallback to 8000 for local testing
+    port = int(os.environ.get("PORT", 8000))
+    # Disable uvicorn's file reloader in production to conserve memory and resources
+    is_prod = os.environ.get("PORT") is not None
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=not is_prod)
 

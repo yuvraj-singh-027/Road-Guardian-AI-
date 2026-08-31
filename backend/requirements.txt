@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 opencv-python-headless
-ultralytics
+# ultralytics  # Commented out to prevent build failures/timeouts on Render due to PyTorch size. Uncomment for local YOLOv8 usage.
 pillow
 pandas
 numpy
