@@ -40,6 +40,73 @@ except ImportError as e:
         raise RuntimeError(f"Failed to import core engines: {e}")
 
 
+# ================== AI HAZARD SCANNER CONFIGURATION & VALIDATION LAYERS ==================
+CONF_THRESHOLD = float(os.getenv("CONF_THRESHOLD", "0.6"))
+
+def validate_uploaded_image(contents: bytes, filename: str, content_type: str) -> None:
+    """
+    Validates the uploaded file is a valid, suitable road image for computer-vision processing.
+    If unsuitable, raises an HTTPException with a user-friendly message.
+    """
+    # 1. Check MIME and extension
+    is_image_mime = content_type and content_type.startswith("image/")
+    is_image_ext = filename and filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".bmp"))
+    if not is_image_mime and not is_image_ext:
+        raise HTTPException(
+            status_code=400, 
+            detail="Please upload a valid road image for pothole detection."
+        )
+
+    # 2. Try decoding with OpenCV
+    np_arr = np.frombuffer(contents, np.uint8)
+    img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    if img is None:
+        raise HTTPException(
+            status_code=400, 
+            detail="Please upload a valid road image for pothole detection."
+        )
+
+    # 3. Check resolution
+    h, w = img.shape[:2]
+    if w < 100 or h < 100:
+        raise HTTPException(
+            status_code=400, 
+            detail="Please upload a valid road image for pothole detection. The image resolution is too low."
+        )
+
+    # 4. Check if image is blank or corrupted (extremely low pixel variance)
+    if np.std(img) < 0.1:
+        raise HTTPException(
+            status_code=400, 
+            detail="Please upload a valid road image for pothole detection. The image appears to be corrupted or blank."
+        )
+
+def validate_single_detection(xmin: int, ymin: int, xmax: int, ymax: int, conf: float, cls_name: str, img_w: int, img_h: int) -> bool:
+    """
+    Modular validation layer for a single YOLO detection.
+    Filters by class, confidence, and bounding box validity.
+    """
+    # 1. Class filtering: must be Pothole or similar damage class
+    cls_lower = cls_name.lower()
+    if not ("pothole" in cls_lower or "damage" in cls_lower or "crack" in cls_lower):
+        return False
+
+    # 2. Confidence filtering
+    if conf < CONF_THRESHOLD:
+        return False
+
+    # 3. Bounding-box validation
+    width = xmax - xmin
+    height = ymax - ymin
+    if width <= 0 or height <= 0:
+        return False
+
+    # Check if coordinates make sense (coordinates must be within image bounds)
+    if xmin < -50 or ymin < -50 or xmax > img_w + 50 or ymax > img_h + 50:
+        return False
+
+    return True
+
 # Try loading ONNX model using OpenCV DNN (highly lightweight, no PyTorch/Ultralytics needed)
 ONNX_NET = None
 ONNX_MODEL_PATH = None
@@ -484,18 +551,15 @@ async def detect_image(
     landmark_name: Optional[str] = Form(None),
     current_user: dict = Depends(get_current_user)
 ):
-    is_image_mime = file.content_type and file.content_type.startswith("image/")
-    is_image_ext = file.filename and file.filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".bmp"))
-
-    if not is_image_mime and not is_image_ext:
-        raise HTTPException(status_code=400, detail="Uploaded file must be a valid image (JPG, PNG, WEBP).")
-
     contents = await file.read()
+
+    # 1. BASIC IMAGE VALIDATION LAYER
+    validate_uploaded_image(contents, file.filename or "uploaded_hazard.jpg", file.content_type or "")
 
     # Check if user provided manual GPS or clicked Use My GPS
     has_manual_gps = (manual_lat is not None and manual_lon is not None and manual_lat != 0 and manual_lon != 0)
 
-    # 1. AUTHENTICITY PRE-CHECK: Reject processing if image is fake / AI-generated / tampered / screen photo / duplicate
+    # 2. AUTHENTICITY PRE-CHECK: Reject processing if image is fake / AI-generated / tampered / screen photo / duplicate
     authenticity_info = None
     try:
         authenticity_info = analyze_photo_authenticity(
@@ -548,15 +612,16 @@ async def detect_image(
     if img_bgr is None:
         raise HTTPException(status_code=400, detail="Failed to decode image.")
 
+    h_orig, w_orig = img_bgr.shape[:2]
     boxes_list = []
     pothole_count = 0
     max_conf = 0.0
     highest_severity = "Low"
+    raw_detections_logged = []
 
     # Option 1: OpenCV DNN (ONNX model) - preferred as it runs everywhere without PyTorch
     if ONNX_NET is not None:
         try:
-            h_orig, w_orig = img_bgr.shape[:2]
             blob = cv2.dnn.blobFromImage(img_bgr, 1/255.0, (640, 640), swapRB=True, crop=False)
             ONNX_NET.setInput(blob)
             outputs = ONNX_NET.forward()
@@ -569,10 +634,11 @@ async def detect_image(
             x_factor = w_orig / 640.0
             y_factor = h_orig / 640.0
             
-            # Postprocessing (conf=0.15, nms=0.45)
+            # Postprocessing using init_thresh to NMSBoxes
+            init_thresh = min(0.15, CONF_THRESHOLD)
             for pred in predictions:
                 confidence = float(pred[4])
-                if confidence >= 0.15:
+                if confidence >= init_thresh:
                     x_center, y_center, w, h = pred[0], pred[1], pred[2], pred[3]
                     
                     xmin = int((x_center - w / 2) * x_factor)
@@ -588,7 +654,7 @@ async def detect_image(
                     boxes.append([xmin, ymin, width, height])
                     confidences.append(confidence)
             
-            indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.15, 0.45)
+            indices = cv2.dnn.NMSBoxes(boxes, confidences, init_thresh, 0.45)
             if len(indices) > 0:
                 flat_indices = indices.flatten() if hasattr(indices, 'flatten') else indices
                 for i in flat_indices:
@@ -596,28 +662,35 @@ async def detect_image(
                     xmax = xmin + w
                     ymax = ymin + h
                     conf = confidences[i]
-                    pothole_count += 1
-                    if conf > max_conf:
-                        max_conf = conf
+                    cls_name = "Pothole"
                     
-                    # Draw box on image
-                    cv2.rectangle(img_bgr, (xmin, ymin), (xmax, ymax), (0, 230, 180), 2)
-                    label_str = f"Pothole {conf:.2f}"
-                    cv2.putText(img_bgr, label_str, (xmin, max(15, ymin - 6)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 230, 180), 2)
+                    raw_detections_logged.append((cls_name, conf))
                     
-                    boxes_list.append({
-                        "bbox": [xmin, ymin, xmax, ymax],
-                        "confidence": round(conf, 3),
-                        "class": "Pothole"
-                    })
+                    # 3. DETECTION VALIDATION LAYER
+                    if validate_single_detection(xmin, ymin, xmax, ymax, conf, cls_name, w_orig, h_orig):
+                        pothole_count += 1
+                        if conf > max_conf:
+                            max_conf = conf
+                        
+                        # Draw box on image only if validated
+                        cv2.rectangle(img_bgr, (xmin, ymin), (xmax, ymax), (0, 230, 180), 2)
+                        label_str = f"Pothole {conf:.2f}"
+                        cv2.putText(img_bgr, label_str, (xmin, max(15, ymin - 6)),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 230, 180), 2)
+                        
+                        boxes_list.append({
+                            "bbox": [xmin, ymin, xmax, ymax],
+                            "confidence": round(conf, 3),
+                            "class": "Pothole"
+                        })
         except Exception as e:
             print(f"[ONNX Inference Error]: {e}")
 
     # Option 2: PyTorch/Ultralytics fallback (if ONNX wasn't loaded)
     elif YOLO_MODEL is not None:
         try:
-            results = YOLO_MODEL.predict(img_bgr, imgsz=416, conf=0.15, verbose=False)
+            init_thresh = min(0.15, CONF_THRESHOLD)
+            results = YOLO_MODEL.predict(img_bgr, imgsz=416, conf=init_thresh, verbose=False)
             for r in results:
                 if hasattr(r, 'boxes') and r.boxes is not None:
                     for b in r.boxes:
@@ -625,22 +698,27 @@ async def detect_image(
                         conf = float(b.conf[0])
                         cls_id = int(b.cls[0])
                         cls_name = r.names.get(cls_id, "Pothole")
-                        pothole_count += 1
-                        if conf > max_conf:
-                            max_conf = conf
-
-                        # Draw box on image
+                        
+                        raw_detections_logged.append((cls_name, conf))
+                        
                         xmin, ymin, xmax, ymax = map(int, coords)
-                        cv2.rectangle(img_bgr, (xmin, ymin), (xmax, ymax), (0, 230, 180), 2)
-                        label_str = f"{cls_name} {conf:.2f}"
-                        cv2.putText(img_bgr, label_str, (xmin, max(15, ymin - 6)),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 230, 180), 2)
+                        # 3. DETECTION VALIDATION LAYER
+                        if validate_single_detection(xmin, ymin, xmax, ymax, conf, cls_name, w_orig, h_orig):
+                            pothole_count += 1
+                            if conf > max_conf:
+                                max_conf = conf
 
-                        boxes_list.append({
-                            "bbox": [xmin, ymin, xmax, ymax],
-                            "confidence": round(conf, 3),
-                            "class": cls_name
-                        })
+                            # Draw box on image only if validated
+                            cv2.rectangle(img_bgr, (xmin, ymin), (xmax, ymax), (0, 230, 180), 2)
+                            label_str = f"{cls_name} {conf:.2f}"
+                            cv2.putText(img_bgr, label_str, (xmin, max(15, ymin - 6)),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 230, 180), 2)
+
+                            boxes_list.append({
+                                "bbox": [xmin, ymin, xmax, ymax],
+                                "confidence": round(conf, 3),
+                                "class": cls_name
+                            })
         except Exception as e:
             print(f"[YOLO Inference Error]: {e}")
 
@@ -652,6 +730,12 @@ async def detect_image(
             pothole_count = 1
             max_conf = 0.82
             highest_severity = "Medium"
+            # Add a mock detection box for frontend demo when model is not available
+            boxes_list.append({
+                "bbox": [int(w_orig*0.2), int(h_orig*0.2), int(w_orig*0.8), int(h_orig*0.8)],
+                "confidence": 0.82,
+                "class": "Pothole (Mock Fallback)"
+            })
         else:
             # A model is loaded, but actually detected 0 potholes in the image!
             pothole_count = 0
@@ -727,6 +811,21 @@ async def detect_image(
         except Exception as dberr:
             print(f"[DB AUTO-INSERT ERROR]: {dberr}")
 
+    # Decision message
+    final_result_message = "Pothole detected" if pothole_count > 0 else "No pothole detected"
+
+    # Development/debugging logging
+    raw_count = len(raw_detections_logged)
+    print("\n" + "="*45)
+    print("[AI HAZARD DETECTION LOG]")
+    print(f"Image name: {file.filename}")
+    print(f"Number of raw detections: {raw_count}")
+    for raw_cls, raw_conf in raw_detections_logged:
+        print(f"  - Class detected: {raw_cls} | Confidence score: {raw_conf:.3f}")
+    print(f"Number of valid detections: {pothole_count}")
+    print(f"Final decision: {final_result_message}")
+    print("="*45 + "\n")
+
     return {
         "filename": file.filename,
         "landmark_name": resolved_landmark,
@@ -740,7 +839,8 @@ async def detect_image(
         "authenticity": authenticity_info,
         "is_fake": is_fake,
         "rejection_reason": rejection_reason,
-        "annotated_image_b64": f"data:image/jpeg;base64,{b64_str}"
+        "annotated_image_b64": f"data:image/jpeg;base64,{b64_str}",
+        "message": final_result_message
     }
 
 @app.post("/api/authenticity/analyze")

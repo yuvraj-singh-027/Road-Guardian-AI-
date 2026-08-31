@@ -44,6 +44,9 @@ gps_time = 0
 
 # ================== TRAE MODULE ==================
 
+# Configurable confidence threshold
+CONF_THRESHOLD = 0.6
+
 # 🔍 ANALYZE (A of TRAE)
 def analyze(conf):
     if conf > 0.75:
@@ -55,13 +58,49 @@ def analyze(conf):
 
 # TRAE ENGINE (CORE)
 def TRAE_engine(frame):
-    results = model.predict(frame, imgsz=416, conf=0.5, verbose=False)
+    # Predict with a lower confidence (0.15) and filter inside this function
+    results = model.predict(frame, imgsz=416, conf=0.15, verbose=False)
     
     detections = []
+    raw_detections_logged = []
+    valid_indices = []
     
-    for box in results[0].boxes:
-        conf = float(box.conf[0])
-        detections.append(conf)
+    h_orig, w_orig = frame.shape[:2]
+    
+    if len(results) > 0 and results[0].boxes is not None:
+        for idx, box in enumerate(results[0].boxes):
+            conf = float(box.conf[0])
+            cls_id = int(box.cls[0])
+            cls_name = results[0].names.get(cls_id, "Pothole")
+            
+            raw_detections_logged.append((cls_name, conf))
+            
+            # Validation layer:
+            # 1. Class filtering (must contain pothole, damage, or crack)
+            cls_lower = cls_name.lower()
+            is_pothole = "pothole" in cls_lower or "damage" in cls_lower or "crack" in cls_lower
+            
+            # 2. Confidence filtering
+            if is_pothole and conf >= CONF_THRESHOLD:
+                # 3. Bounding box validation
+                coords = box.xyxy[0].tolist()
+                if len(coords) == 4:
+                    xmin, ymin, xmax, ymax = coords
+                    width = xmax - xmin
+                    height = ymax - ymin
+                    if width > 0 and height > 0 and xmin >= -50 and ymin >= -50 and xmax <= w_orig + 50 and ymax <= h_orig + 50:
+                        detections.append(conf)
+                        valid_indices.append(idx)
+                        
+        # Slices boxes array to keep only valid detections for plotting
+        results[0].boxes = results[0].boxes[valid_indices]
+        
+    # Logging
+    raw_count = len(raw_detections_logged)
+    valid_count = len(detections)
+    final_result_message = "Pothole detected" if valid_count > 0 else "No pothole detected"
+    
+    print(f"[ROAD Webcam Log] Raw detections: {raw_count} | Valid pothole detections: {valid_count} | Final result: {final_result_message}")
     
     return results, detections
 
