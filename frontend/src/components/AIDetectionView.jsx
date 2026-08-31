@@ -345,23 +345,22 @@ export default function AIDetectionView() {
           ) : (
             <div>
               <div 
-                className="dropzone"
-                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  padding: '24px',
+                  background: 'rgba(24, 24, 27, 0.5)',
+                  border: '1px dashed rgba(0, 230, 180, 0.2)',
+                  borderRadius: '12px',
+                  textAlign: 'center',
+                  marginBottom: '14px'
+                }}
               >
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  onChange={handleFileChange} 
-                  accept="image/*" 
-                  style={{ display: 'none' }} 
-                />
                 {previewUrl ? (
                   <img src={previewUrl} alt="Preview" style={{ maxHeight: '160px', borderRadius: '10px', objectFit: 'contain' }} />
                 ) : (
                   <div>
-                    <Upload size={34} color="#00E6B4" style={{ marginBottom: '8px' }} />
-                    <p style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem' }}>Click or drag road image to scan</p>
-                    <p style={{ fontSize: '0.75rem', color: '#71717a', marginTop: '4px' }}>Supports JPG, PNG with EXIF GPS or manual location input</p>
+                    <Camera size={34} color="#00E6B4" style={{ marginBottom: '8px' }} />
+                    <p style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem' }}>No Active Capture</p>
+                    <p style={{ fontSize: '0.75rem', color: '#71717a', marginTop: '4px' }}>Click "Live WebCam" below to start the camera and capture a road photo.</p>
                   </div>
                 )}
               </div>
