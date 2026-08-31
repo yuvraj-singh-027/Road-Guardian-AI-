@@ -6,7 +6,8 @@ import './index.css'
 // Global fetch interceptor to redirect API calls to the remote backend in production/deployment
 const originalFetch = window.fetch;
 window.fetch = (url, options) => {
-  const baseUrl = import.meta.env.VITE_API_URL || '';
+  // Default to the live Render URL. Can be overridden locally via VITE_API_URL env var.
+  const baseUrl = import.meta.env.VITE_API_URL || 'https://road-guardian-ai-5.onrender.com';
   if (baseUrl) {
     if (typeof url === 'string') {
       if (url.startsWith('/api/')) {
