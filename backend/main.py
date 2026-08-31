@@ -741,6 +741,10 @@ async def detect_image(
             pothole_count = 0
             max_conf = 0.0
             highest_severity = "None"
+            raise HTTPException(
+                status_code=400,
+                detail="No pothole detected so unable to upload."
+            )
     else:
         if max_conf > 0.8:
             highest_severity = "Critical" if pothole_count >= 3 else "High"
