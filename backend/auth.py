@@ -722,7 +722,8 @@ async def google_standard_login(request: Request):
         "response_type=code&"
         f"client_id={client_id}&"
         f"redirect_uri={redirect_uri}&"
-        "scope=openid%20email%20profile"
+        "scope=openid%20email%20profile&"
+        "prompt=select_account"
     )
     return RedirectResponse(google_auth_url)
 
