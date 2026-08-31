@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Camera, AlertTriangle, ShieldCheck, MapPin, RefreshCw, Clock, History, FileText, Sparkles, PieChart as PieIcon, BarChart2, Locate, Compass } from 'lucide-react';
+import { Upload, Camera, AlertTriangle, ShieldCheck, MapPin, RefreshCw, Clock, History, FileText, Sparkles, PieChart as PieIcon, BarChart2, Locate, Compass, Lock } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 
 const decimalToDMS = (deg, isLat) => {
@@ -13,7 +13,7 @@ const decimalToDMS = (deg, isLat) => {
   return `${degrees}°${minutes}'${seconds}" ${direction}`;
 };
 
-export default function AIDetectionView() {
+export default function AIDetectionView({ userRole = 'public' }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -348,7 +348,7 @@ export default function AIDetectionView() {
                 style={{
                   padding: '24px',
                   background: 'rgba(24, 24, 27, 0.5)',
-                  border: '1px dashed rgba(0, 230, 180, 0.2)',
+                  border: userRole === 'public' ? '1px dashed rgba(0, 230, 180, 0.2)' : '1px dashed rgba(245, 158, 11, 0.2)',
                   borderRadius: '12px',
                   textAlign: 'center',
                   marginBottom: '14px'
@@ -357,11 +357,19 @@ export default function AIDetectionView() {
                 {previewUrl ? (
                   <img src={previewUrl} alt="Preview" style={{ maxHeight: '160px', borderRadius: '10px', objectFit: 'contain' }} />
                 ) : (
-                  <div>
-                    <Camera size={34} color="#00E6B4" style={{ marginBottom: '8px' }} />
-                    <p style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem' }}>No Active Capture</p>
-                    <p style={{ fontSize: '0.75rem', color: '#71717a', marginTop: '4px' }}>Click "Live WebCam" below to start the camera and capture a road photo.</p>
-                  </div>
+                  userRole === 'public' ? (
+                    <div>
+                      <Camera size={34} color="#00E6B4" style={{ marginBottom: '8px' }} />
+                      <p style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem' }}>No Active Capture</p>
+                      <p style={{ fontSize: '0.75rem', color: '#71717a', marginTop: '4px' }}>Click "Live WebCam" below to start the camera and capture a road photo.</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <Lock size={34} color="#F59E0B" style={{ marginBottom: '8px' }} />
+                      <p style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem' }}>Scanner Restricted</p>
+                      <p style={{ fontSize: '0.75rem', color: '#71717a', marginTop: '4px' }}>Live WebCam scanner is restricted to the Citizen Portal. Admins cannot scan road hazards directly.</p>
+                    </div>
+                  )
                 )}
               </div>
 
@@ -493,9 +501,11 @@ export default function AIDetectionView() {
                   {isProcessing ? 'Evaluating Model...' : 'Run AI Hazard Scanner'}
                 </button>
 
-                <button className="btn-secondary" onClick={startCamera}>
-                  <Camera size={16} /> Live WebCam
-                </button>
+                {userRole === 'public' && (
+                  <button className="btn-secondary" onClick={startCamera}>
+                    <Camera size={16} /> Live WebCam
+                  </button>
+                )}
               </div>
             </div>
           )}

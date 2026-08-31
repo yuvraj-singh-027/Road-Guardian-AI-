@@ -315,7 +315,7 @@ export default function App() {
         </div>
 
         {/* Dynamic View Component */}
-        {activeTab === 'detection' && <AIDetectionView />}
+        {activeTab === 'detection' && <AIDetectionView userRole={userRole} />}
         {activeTab === 'digital-twin' && <DigitalTwinMapView />}
         {activeTab === 'traffic-reroute' && (userRole === 'admin' ? <TrafficRerouteView /> : renderRestrictedAccessNotice())}
         {activeTab === 'risk-calculator' && (userRole === 'admin' ? <RiskCalculatorView /> : renderRestrictedAccessNotice())}
