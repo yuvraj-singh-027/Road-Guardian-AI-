@@ -812,3 +812,14 @@ async def google_standard_callback(code: str, request: Request, response: Respon
     except Exception as e:
         print(f"[GOOGLE OAUTH CALLBACK ERROR]: {e}")
         return RedirectResponse(f"{FRONTEND_URL}/?error=google_auth_failed")
+
+@router.get("/google/debug")
+async def google_debug():
+    import os
+    return {
+        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+        "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI"),
+        "frontend_url": os.getenv("FRONTEND_URL"),
+        "env_exists": os.path.exists(".env") or os.path.exists("backend/.env"),
+        "env_path_abs": os.path.abspath(".env")
+    }
