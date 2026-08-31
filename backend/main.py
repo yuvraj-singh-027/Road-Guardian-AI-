@@ -40,7 +40,30 @@ except ImportError as e:
         raise RuntimeError(f"Failed to import core engines: {e}")
 
 
-# Try importing Ultralytics YOLO
+# Try loading ONNX model using OpenCV DNN (highly lightweight, no PyTorch/Ultralytics needed)
+ONNX_NET = None
+ONNX_MODEL_PATH = None
+
+def init_onnx_model():
+    global ONNX_NET, ONNX_MODEL_PATH
+    candidate_paths = [
+        BASE_DIR / "runs" / "detect" / "train2" / "weights" / "best.onnx",
+        BASE_DIR / "runs" / "detect" / "train" / "weights" / "best.onnx",
+        BASE_DIR / "best.onnx"
+    ]
+    for p in candidate_paths:
+        if p.exists():
+            try:
+                ONNX_NET = cv2.dnn.readNet(str(p))
+                ONNX_MODEL_PATH = str(p)
+                print(f"[ONNX] Successfully loaded OpenCV DNN model from {p}")
+                break
+            except Exception as ex:
+                print(f"[ONNX Warning] Failed loading {p}: {ex}")
+
+init_onnx_model()
+
+# Try importing Ultralytics YOLO as a fallback/alternative
 YOLO_MODEL = None
 YOLO_MODEL_PATH = None
 
@@ -530,7 +553,69 @@ async def detect_image(
     max_conf = 0.0
     highest_severity = "Low"
 
-    if YOLO_MODEL is not None:
+    # Option 1: OpenCV DNN (ONNX model) - preferred as it runs everywhere without PyTorch
+    if ONNX_NET is not None:
+        try:
+            h_orig, w_orig = img_bgr.shape[:2]
+            blob = cv2.dnn.blobFromImage(img_bgr, 1/255.0, (640, 640), swapRB=True, crop=False)
+            ONNX_NET.setInput(blob)
+            outputs = ONNX_NET.forward()
+            
+            predictions = np.transpose(outputs[0])
+            
+            boxes = []
+            confidences = []
+            
+            x_factor = w_orig / 640.0
+            y_factor = h_orig / 640.0
+            
+            # Postprocessing (conf=0.15, nms=0.45)
+            for pred in predictions:
+                confidence = float(pred[4])
+                if confidence >= 0.15:
+                    x_center, y_center, w, h = pred[0], pred[1], pred[2], pred[3]
+                    
+                    xmin = int((x_center - w / 2) * x_factor)
+                    ymin = int((y_center - h / 2) * y_factor)
+                    width = int(w * x_factor)
+                    height = int(h * y_factor)
+                    
+                    xmin = max(0, min(xmin, w_orig - 1))
+                    ymin = max(0, min(ymin, h_orig - 1))
+                    width = max(1, min(width, w_orig - xmin))
+                    height = max(1, min(height, h_orig - ymin))
+                    
+                    boxes.append([xmin, ymin, width, height])
+                    confidences.append(confidence)
+            
+            indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.15, 0.45)
+            if len(indices) > 0:
+                flat_indices = indices.flatten() if hasattr(indices, 'flatten') else indices
+                for i in flat_indices:
+                    xmin, ymin, w, h = boxes[i]
+                    xmax = xmin + w
+                    ymax = ymin + h
+                    conf = confidences[i]
+                    pothole_count += 1
+                    if conf > max_conf:
+                        max_conf = conf
+                    
+                    # Draw box on image
+                    cv2.rectangle(img_bgr, (xmin, ymin), (xmax, ymax), (0, 230, 180), 2)
+                    label_str = f"Pothole {conf:.2f}"
+                    cv2.putText(img_bgr, label_str, (xmin, max(15, ymin - 6)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 230, 180), 2)
+                    
+                    boxes_list.append({
+                        "bbox": [xmin, ymin, xmax, ymax],
+                        "confidence": round(conf, 3),
+                        "class": "Pothole"
+                    })
+        except Exception as e:
+            print(f"[ONNX Inference Error]: {e}")
+
+    # Option 2: PyTorch/Ultralytics fallback (if ONNX wasn't loaded)
+    elif YOLO_MODEL is not None:
         try:
             results = YOLO_MODEL.predict(img_bgr, imgsz=416, conf=0.15, verbose=False)
             for r in results:
@@ -557,18 +642,18 @@ async def detect_image(
                             "class": cls_name
                         })
         except Exception as e:
-            print(f"[Inference Error]: {e}")
+            print(f"[YOLO Inference Error]: {e}")
 
-    # Fallback if no potholes detected or YOLO model unavailable
+    # Fallback if no potholes detected or models unavailable
     if pothole_count == 0:
-        # Check if the YOLO model is actually active
-        if YOLO_MODEL is None:
+        # Check if any model is actually active/loaded
+        if ONNX_NET is None and YOLO_MODEL is None:
             # Model is unavailable (e.g. Render environment), use mock fallback for demo purposes
             pothole_count = 1
             max_conf = 0.82
             highest_severity = "Medium"
         else:
-            # Model is loaded, but actually detected 0 potholes in the image!
+            # A model is loaded, but actually detected 0 potholes in the image!
             pothole_count = 0
             max_conf = 0.0
             highest_severity = "None"
