@@ -561,9 +561,17 @@ async def detect_image(
 
     # Fallback if no potholes detected or YOLO model unavailable
     if pothole_count == 0:
-        pothole_count = 1
-        max_conf = 0.82
-        highest_severity = "Medium"
+        # Check if the YOLO model is actually active
+        if YOLO_MODEL is None:
+            # Model is unavailable (e.g. Render environment), use mock fallback for demo purposes
+            pothole_count = 1
+            max_conf = 0.82
+            highest_severity = "Medium"
+        else:
+            # Model is loaded, but actually detected 0 potholes in the image!
+            pothole_count = 0
+            max_conf = 0.0
+            highest_severity = "None"
     else:
         if max_conf > 0.8:
             highest_severity = "Critical" if pothole_count >= 3 else "High"
@@ -605,33 +613,34 @@ async def detect_image(
     _, encoded_img = cv2.imencode('.jpg', img_bgr)
     b64_str = base64.b64encode(encoded_img).decode('utf-8')
 
-    # Persist the detection to database & potholes folder
-    try:
-        potholes_dir = BASE_DIR / "potholes"
-        potholes_dir.mkdir(exist_ok=True)
-        
-        # Save the annotated image to potholes directory
-        out_filename = f"detect_{int(time.time())}_{file.filename or 'uploaded.jpg'}"
-        out_path = potholes_dir / out_filename
-        cv2.imwrite(str(out_path), img_bgr)
-        
-        # Call database insert
+    # Persist the detection to database & potholes folder (only if a hazard was actually detected)
+    if pothole_count > 0:
         try:
-            from .db_manager import insert_detection
-        except ImportError:
-            from db_manager import insert_detection
-        success, msg = insert_detection(
-            image_name=out_filename,
-            latitude=str(lat),
-            longitude=str(lon),
-            severity=highest_severity,
-            confidence=max_conf,
-            time_val=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            user_id=current_user["id"]
-        )
-        print(f"[DB AUTO-INSERT LOG]: {msg}")
-    except Exception as dberr:
-        print(f"[DB AUTO-INSERT ERROR]: {dberr}")
+            potholes_dir = BASE_DIR / "potholes"
+            potholes_dir.mkdir(exist_ok=True)
+            
+            # Save the annotated image to potholes directory
+            out_filename = f"detect_{int(time.time())}_{file.filename or 'uploaded.jpg'}"
+            out_path = potholes_dir / out_filename
+            cv2.imwrite(str(out_path), img_bgr)
+            
+            # Call database insert
+            try:
+                from .db_manager import insert_detection
+            except ImportError:
+                from db_manager import insert_detection
+            success, msg = insert_detection(
+                image_name=out_filename,
+                latitude=str(lat),
+                longitude=str(lon),
+                severity=highest_severity,
+                confidence=max_conf,
+                time_val=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                user_id=current_user["id"]
+            )
+            print(f"[DB AUTO-INSERT LOG]: {msg}")
+        except Exception as dberr:
+            print(f"[DB AUTO-INSERT ERROR]: {dberr}")
 
     return {
         "filename": file.filename,
