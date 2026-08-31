@@ -336,16 +336,34 @@ def update_user_role(user_id: int, role: str):
 # --- Middleware / Authentication Dependency Guard ---
 
 async def get_current_user(request: Request) -> dict:
-    """FastAPI Dependency to retrieve and authorize the current session user (Bypassed)."""
-    return {
-        "id": 1,
-        "name": "Authority Admin",
-        "email": "admin@roadguardian.ai",
-        "role": "admin",
-        "profile_picture": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100",
-        "is_verified": 1,
-        "created_at": "2026-08-30 00:00:00"
-    }
+    """FastAPI Dependency to retrieve and authorize the current session user by verifying the JWT token."""
+    # 1. Retrieve token from Authorization header or cookie
+    token = None
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+    else:
+        token = request.cookies.get("road_guardian_token")
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication token required.")
+
+    # 2. Decode and verify JWT token
+    payload = decode_access_token(token)
+    if not payload or "sub" not in payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token.")
+
+    try:
+        user_id = int(payload["sub"])
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid token payload.")
+
+    # 3. Load user from database
+    user = get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User account not found.")
+
+    return user
 
 
 # --- Auth Routes Implementation ---
