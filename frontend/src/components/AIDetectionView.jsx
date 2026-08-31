@@ -20,6 +20,7 @@ export default function AIDetectionView() {
   const [detectionResult, setDetectionResult] = useState(null);
   const [fakeImageWarning, setFakeImageWarning] = useState(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [facingMode, setFacingMode] = useState('environment'); // environment (back) or user (front)
   const [exifWarning, setExifWarning] = useState(false);
 
   // Manual location state
@@ -38,6 +39,11 @@ export default function AIDetectionView() {
 
   useEffect(() => {
     fetchHistory();
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+      }
+    };
   }, []);
 
   const fetchHistory = () => {
@@ -220,17 +226,43 @@ export default function AIDetectionView() {
     }
   };
 
-  const startCamera = async () => {
+  const startCamera = async (currentFacing) => {
+    const mode = typeof currentFacing === 'string' ? currentFacing : facingMode;
     setCameraActive(true);
+    
+    // Stop any existing tracks first
+    if (videoRef.current && videoRef.current.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: mode }
+      });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
     } catch (err) {
-      console.error('Camera access denied:', err);
-      alert('Could not access webcam.');
-      setCameraActive(false);
+      console.error('Camera access denied with facingMode:', err);
+      // Fallback: try default video constraint without specifying facingMode
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (fallbackErr) {
+        console.error('Fallback camera access failed:', fallbackErr);
+        alert('Could not access webcam.');
+        setCameraActive(false);
+      }
+    }
+  };
+
+  const toggleFacingMode = () => {
+    const newMode = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(newMode);
+    if (cameraActive) {
+      startCamera(newMode);
     }
   };
 
@@ -295,11 +327,19 @@ export default function AIDetectionView() {
           {cameraActive ? (
             <div style={{ textAlign: 'center' }}>
               <video ref={videoRef} autoPlay playsInline style={{ width: '100%', borderRadius: '12px', border: '1px solid #00E6B4' }} />
-              <div style={{ marginTop: '14px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <div style={{ marginTop: '14px', display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
                 <button className="btn-primary" onClick={captureCameraFrame}>
                   <Camera size={16} /> Capture Frame
                 </button>
-                <button className="btn-secondary" onClick={() => setCameraActive(false)}>Cancel</button>
+                <button className="btn-secondary" onClick={toggleFacingMode} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <RefreshCw size={16} /> Switch Camera ({facingMode === 'user' ? 'Front' : 'Back'})
+                </button>
+                <button className="btn-secondary" onClick={() => {
+                  setCameraActive(false);
+                  if (videoRef.current && videoRef.current.srcObject) {
+                    videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+                  }
+                }}>Cancel</button>
               </div>
             </div>
           ) : (
