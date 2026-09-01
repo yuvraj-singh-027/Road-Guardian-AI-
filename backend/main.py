@@ -360,25 +360,37 @@ def get_weather(lat: float = Query(28.6139), lon: float = Query(77.2090)):
     return fetch_live_weather(lat, lon)
 
 def reverse_geocode_coords(lat: float, lon: float) -> str:
-    """Reverse geocode coordinates to a clean human-readable street address using OpenStreetMap Nominatim with caching/fallback."""
+    """Reverse geocode coordinates to a clean, high-precision street address using OpenStreetMap Nominatim with rich address details."""
     try:
         import requests
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
-        res = requests.get(url, headers={"User-Agent": "RoadGuardianAI/2.0"}, timeout=3)
+        res = requests.get(url, headers={"User-Agent": "RoadGuardianAI/2.0-GeoPrecise"}, timeout=4)
         if res.status_code == 200:
             data = res.json()
+            if "address" in data:
+                addr = data["address"]
+                poi = addr.get("amenity") or addr.get("building") or addr.get("shop") or addr.get("office") or addr.get("tourism") or addr.get("landmark")
+                house_num = addr.get("house_number")
+                road = addr.get("road") or addr.get("pedestrian") or addr.get("street") or addr.get("path") or addr.get("footway")
+                suburb = addr.get("suburb") or addr.get("neighbourhood") or addr.get("quarter") or addr.get("residential") or addr.get("block") or addr.get("sector") or addr.get("subdivision")
+                district = addr.get("city_district") or addr.get("subdistrict") or addr.get("district") or addr.get("county")
+                city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("municipality")
+                state = addr.get("state")
+                pincode = addr.get("postcode")
+                
+                parts = []
+                if poi: parts.append(str(poi).strip())
+                if house_num and road: parts.append(f"{house_num} {road}".strip())
+                elif road: parts.append(str(road).strip())
+                if suburb and str(suburb).strip() not in parts: parts.append(str(suburb).strip())
+                if district and str(district).strip() not in parts and district != city: parts.append(str(district).strip())
+                if city and str(city).strip() not in parts: parts.append(str(city).strip())
+                if state and str(state).strip() not in parts: parts.append(str(state).strip())
+                if pincode: parts.append(f"PIN: {str(pincode).strip()}")
+                
+                if parts:
+                    return ", ".join(parts)
             if "display_name" in data:
-                addr = data.get("address", {})
-                parts = [
-                    addr.get("road") or addr.get("pedestrian") or addr.get("street") or addr.get("building"),
-                    addr.get("suburb") or addr.get("neighbourhood") or addr.get("quarter") or addr.get("residential"),
-                    addr.get("city") or addr.get("town") or addr.get("village") or addr.get("county"),
-                    addr.get("state"),
-                    addr.get("postcode")
-                ]
-                cleaned = [str(p).strip() for p in parts if p and str(p).strip()]
-                if cleaned:
-                    return ", ".join(cleaned)
                 return str(data["display_name"])
     except Exception as ex:
         print(f"[Reverse Geocode Warning]: {ex}")

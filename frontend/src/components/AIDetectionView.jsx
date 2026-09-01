@@ -73,6 +73,59 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
       .finally(() => setLoadingHistory(false));
   };
 
+  const resolvePreciseAddress = async (lat, lon) => {
+    try {
+      // 1. Try Backend reverse geocoding first
+      try {
+        const res = await fetch(`/api/location/reverse-geocode?lat=${lat}&lon=${lon}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.address && !data.address.startsWith("Road Segment (")) {
+            return data.address;
+          }
+        }
+      } catch (e) {
+        console.warn('Backend reverse-geocode fallback:', e);
+      }
+
+      // 2. Query OSM Nominatim with zoom=18 for building/road level precision
+      const osm = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`
+      );
+      if (osm.ok) {
+        const data = await osm.json();
+        const a = data.address || {};
+
+        const poi = a.amenity || a.building || a.shop || a.office || a.tourism || a.leisure || a.landmark || a.highway;
+        const houseNumber = a.house_number;
+        const road = a.road || a.pedestrian || a.street || a.path || a.footway;
+        const locality = a.suburb || a.neighbourhood || a.quarter || a.residential || a.block || a.sector || a.subdivision || a.hamlet;
+        const district = a.city_district || a.subdistrict || a.district || a.county;
+        const city = a.city || a.town || a.village || a.municipality;
+        const state = a.state;
+        const postcode = a.postcode;
+
+        const parts = [];
+        if (poi) parts.push(poi);
+        if (houseNumber && road) parts.push(`${houseNumber} ${road}`);
+        else if (road) parts.push(road);
+        if (locality && !parts.includes(locality)) parts.push(locality);
+        if (district && !parts.includes(district) && district !== city) parts.push(district);
+        if (city && !parts.includes(city)) parts.push(city);
+        if (state && !parts.includes(state)) parts.push(state);
+        if (postcode) parts.push(`PIN: ${postcode}`);
+
+        if (parts.length > 0) {
+          return parts.join(', ');
+        }
+        if (data.display_name) return data.display_name;
+      }
+    } catch (err) {
+      console.warn('Reverse geocode precision error:', err);
+    }
+    return `Road Segment (${decimalToDMS(lat, true)}, ${decimalToDMS(lon, false)})`;
+  };
+
   const handleGetCurrentLocation = () => {
     if (!navigator.geolocation) {
       alert('Geolocation is not supported by your browser.');
@@ -85,59 +138,21 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
         const lon = position.coords.longitude;
         setManualLat(lat.toFixed(6));
         setManualLon(lon.toFixed(6));
+        setExifWarning(false);
 
-        // Auto reverse-geocode to resolve actual street address
-        try {
-          let addr = '';
-          try {
-            const res = await fetch(`/api/location/reverse-geocode?lat=${lat}&lon=${lon}`);
-            if (res.ok) {
-              const data = await res.json();
-              if (data.address) addr = data.address;
-            }
-          } catch (e) {
-            console.warn('Backend reverse-geocode failed, falling back to OSM:', e);
-          }
-
-          if (!addr) {
-            const osm = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`);
-            if (osm.ok) {
-              const data = await osm.json();
-              if (data.display_name) {
-                const a = data.address || {};
-                const parts = [
-                  a.road || a.pedestrian || a.street,
-                  a.suburb || a.neighbourhood || a.quarter,
-                  a.city || a.town || a.village || a.county,
-                  a.state,
-                  a.postcode
-                ].filter(Boolean);
-                addr = parts.length > 0 ? parts.join(', ') : data.display_name;
-              }
-            }
-          }
-
-          if (addr) {
-            setLandmarkName(addr);
-          } else {
-            setLandmarkName(`Road Segment (${decimalToDMS(lat, true)}, ${decimalToDMS(lon, false)})`);
-          }
-        } catch (err) {
-          console.warn('Reverse geocoding error:', err);
-          setLandmarkName(`GPS Location (${decimalToDMS(lat, true)}, ${decimalToDMS(lon, false)})`);
-        } finally {
-          setIsFetchingGps(false);
-        }
+        const addr = await resolvePreciseAddress(lat, lon);
+        setLandmarkName(addr);
+        setIsFetchingGps(false);
       },
       (err) => {
         console.error(err);
         alert('Could not fetch device GPS. Defaulting to New Delhi coordinates.');
         setManualLat('28.613900');
         setManualLon('77.209000');
-        setLandmarkName('Kartavya Path, Raisina Hill, New Delhi');
+        setLandmarkName('Kartavya Path, Raisina Hill, New Delhi, Delhi, PIN: 110004');
         setIsFetchingGps(false);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
@@ -231,6 +246,23 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
     const mode = typeof currentFacing === 'string' ? currentFacing : facingMode;
     setCameraActive(true);
     
+    // Proactively fetch high-accuracy device GPS in the background
+    if (navigator.geolocation && !manualLat) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          setManualLat(lat.toFixed(6));
+          setManualLon(lon.toFixed(6));
+          setExifWarning(false);
+          const addr = await resolvePreciseAddress(lat, lon);
+          setLandmarkName(addr);
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
+    
     // Stop any existing tracks first
     if (videoRef.current && videoRef.current.srcObject) {
       videoRef.current.srcObject.getTracks().forEach(track => track.stop());
@@ -280,6 +312,27 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
       setSelectedFile(file);
       setPreviewUrl(URL.createObjectURL(file));
       setCameraActive(false);
+      setExifWarning(false);
+      
+      // Auto GPS Geotagging for live webcam capture
+      if (!manualLat && navigator.geolocation) {
+        setIsFetchingGps(true);
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            setManualLat(lat.toFixed(6));
+            setManualLon(lon.toFixed(6));
+            const addr = await resolvePreciseAddress(lat, lon);
+            setLandmarkName(addr);
+            setIsFetchingGps(false);
+          },
+          () => {
+            setIsFetchingGps(false);
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      }
       
       if (videoRef.current && videoRef.current.srcObject) {
         videoRef.current.srcObject.getTracks().forEach(track => track.stop());
