@@ -8,16 +8,16 @@ import os
 from pathlib import Path
 
 # Manually load .env file into os.environ if it exists
-_env_path = Path(__file__).resolve().parent / ".env"
-if _env_path.exists():
-    with open(_env_path, "r", encoding="utf-8") as _f:
-        for _line in _f:
-            _line = _line.strip()
-            if not _line or _line.startswith("#"):
-                continue
-            if "=" in _line:
-                _key, _val = _line.split("=", 1)
-                os.environ[_key.strip()] = _val.strip()
+for _env_candidate in [Path(__file__).resolve().parent / ".env", Path(__file__).resolve().parent.parent / ".env"]:
+    if _env_candidate.exists():
+        with open(_env_candidate, "r", encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if not _line or _line.startswith("#"):
+                    continue
+                if "=" in _line:
+                    _key, _val = _line.split("=", 1)
+                    os.environ[_key.strip()] = _val.strip()
 
 import sqlite3
 import math
