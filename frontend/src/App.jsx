@@ -7,6 +7,7 @@ import DigitalTwinMapView from './components/DigitalTwinMapView';
 import TrafficRerouteView from './components/TrafficRerouteView';
 import RiskCalculatorView from './components/RiskCalculatorView';
 import ReportGeneratorView from './components/ReportGeneratorView';
+import AuthenticityVerifierView from './components/AuthenticityVerifierView';
 import UserProfileModal from './components/UserProfileModal';
 import AuthPortal from './components/AuthPortal';
 import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, Lock, KeyRound, ArrowUpRight, Loader } from 'lucide-react';
@@ -128,7 +129,7 @@ export default function App() {
   useEffect(() => {
     if (userRole === 'admin' && activeTab === 'detection') {
       setActiveTab('digital-twin');
-    } else if (userRole === 'public' && activeTab !== 'detection') {
+    } else if (userRole === 'public' && activeTab !== 'detection' && activeTab !== 'authenticity') {
       setActiveTab('detection');
     }
   }, [userRole, activeTab]);
@@ -159,6 +160,11 @@ export default function App() {
         return {
           title: 'AI Hazard Perception & Computer Vision',
           subtitle: 'Real-time pothole and road damage detection with EXIF GPS geotagging mapping'
+        };
+      case 'authenticity':
+        return {
+          title: 'Image Authenticity Verification Engine',
+          subtitle: 'Autonomous 7-layer forensic verification pipeline for incident and hazard evidence validation'
         };
       case 'digital-twin':
         return {
@@ -324,7 +330,8 @@ export default function App() {
         </div>
 
         {/* Dynamic View Component */}
-        {activeTab === 'detection' && <AIDetectionView userRole={userRole} />}
+        {activeTab === 'detection' && <AIDetectionView userRole={userRole} onNavigateToAuthenticity={() => setActiveTab('authenticity')} />}
+        {activeTab === 'authenticity' && <AuthenticityVerifierView onNavigateToDetection={(file) => setActiveTab('detection')} />}
         {activeTab === 'digital-twin' && <DigitalTwinMapView />}
         {activeTab === 'traffic-reroute' && (userRole === 'admin' ? <TrafficRerouteView /> : renderRestrictedAccessNotice())}
         {activeTab === 'risk-calculator' && (userRole === 'admin' ? <RiskCalculatorView /> : renderRestrictedAccessNotice())}

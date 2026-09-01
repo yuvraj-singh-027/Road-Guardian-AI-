@@ -150,11 +150,32 @@ def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS authenticity_audits (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    image_name VARCHAR(255) NOT NULL,
+                    phash VARCHAR(64),
+                    authenticity_score FLOAT,
+                    status VARCHAR(50),
+                    status_code VARCHAR(50),
+                    bullet_summary TEXT,
+                    report_json LONGTEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                """)
                 # Try adding user_id dynamically if column is missing on existing table
                 try:
                     cursor.execute("SELECT user_id FROM pothole_detections LIMIT 1")
                 except Exception:
                     cursor.execute("ALTER TABLE pothole_detections ADD COLUMN user_id INT NULL")
+                try:
+                    cursor.execute("SELECT phash FROM pothole_detections LIMIT 1")
+                except Exception:
+                    cursor.execute("ALTER TABLE pothole_detections ADD COLUMN phash VARCHAR(64) NULL")
+                try:
+                    cursor.execute("SELECT authenticity_score FROM pothole_detections LIMIT 1")
+                except Exception:
+                    cursor.execute("ALTER TABLE pothole_detections ADD COLUMN authenticity_score FLOAT NULL")
         else: # SQLite
             with conn:
                 conn.execute("""
@@ -190,11 +211,32 @@ def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 """)
-                # Try adding user_id dynamically if column is missing on existing table
+                conn.execute("""
+                CREATE TABLE IF NOT EXISTS authenticity_audits (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    image_name TEXT NOT NULL,
+                    phash TEXT,
+                    authenticity_score REAL,
+                    status TEXT,
+                    status_code TEXT,
+                    bullet_summary TEXT,
+                    report_json TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                """)
+                # Try adding dynamic columns if missing on existing table
                 try:
                     conn.execute("SELECT user_id FROM pothole_detections LIMIT 1")
                 except Exception:
                     conn.execute("ALTER TABLE pothole_detections ADD COLUMN user_id INTEGER")
+                try:
+                    conn.execute("SELECT phash FROM pothole_detections LIMIT 1")
+                except Exception:
+                    conn.execute("ALTER TABLE pothole_detections ADD COLUMN phash TEXT")
+                try:
+                    conn.execute("SELECT authenticity_score FROM pothole_detections LIMIT 1")
+                except Exception:
+                    conn.execute("ALTER TABLE pothole_detections ADD COLUMN authenticity_score REAL")
     finally:
         conn.close()
     
@@ -301,7 +343,9 @@ def insert_detection(
     time_val: Any = None,
     image_bytes_or_path: Any = None,
     skip_dedup: bool = False,
-    user_id: Optional[int] = None
+    user_id: Optional[int] = None,
+    phash: str = "",
+    authenticity_score: Optional[float] = None
 ) -> Tuple[bool, str]:
     """
     Inserts a new pothole detection record into the database after deduplication checks.
@@ -346,19 +390,138 @@ def insert_detection(
             with conn.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO pothole_detections 
-                    (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, risk_score, image_hash, user_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, risk_score, img_hash, user_id))
+                    (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, risk_score, image_hash, user_id, phash, authenticity_score)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, risk_score, img_hash, user_id, phash or None, authenticity_score))
         else: # sqlite
             with conn:
                 conn.execute("""
                     INSERT INTO pothole_detections 
-                    (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, risk_score, image_hash, user_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, risk_score, img_hash, user_id))
+                    (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, risk_score, image_hash, user_id, phash, authenticity_score)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, risk_score, img_hash, user_id, phash or None, authenticity_score))
         return True, f"Successfully logged detection '{image_name}' to {db_type.upper()} database."
     except Exception as e:
         return False, f"Database insertion error: {e}"
+    finally:
+        conn.close()
+
+
+def get_historical_phashes() -> List[Dict[str, Any]]:
+    """
+    Fetches all previously logged perceptual hashes from both pothole_detections and authenticity_audits
+    to perform live pHash similarity comparison.
+    """
+    init_db()
+    conn, db_type = get_db_connection()
+    results = []
+    try:
+        if db_type == "mysql":
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT id, image_name, phash, time as created_at FROM pothole_detections WHERE phash IS NOT NULL AND phash != '' ORDER BY id DESC LIMIT 500")
+                rows1 = cursor.fetchall()
+                cursor.execute("SELECT id, image_name, phash, created_at FROM authenticity_audits WHERE phash IS NOT NULL AND phash != '' ORDER BY id DESC LIMIT 500")
+                rows2 = cursor.fetchall()
+        else:
+            cursor = conn.execute("SELECT id, image_name, phash, time as created_at FROM pothole_detections WHERE phash IS NOT NULL AND phash != '' ORDER BY id DESC LIMIT 500")
+            rows1 = [dict(r) for r in cursor.fetchall()]
+            cursor = conn.execute("SELECT id, image_name, phash, created_at FROM authenticity_audits WHERE phash IS NOT NULL AND phash != '' ORDER BY id DESC LIMIT 500")
+            rows2 = [dict(r) for r in cursor.fetchall()]
+
+        seen_hashes = set()
+        for r in rows1 + rows2:
+            h = r.get("phash")
+            if h and h not in seen_hashes:
+                seen_hashes.add(h)
+                results.append({
+                    "id": r.get("id"),
+                    "filename": r.get("image_name"),
+                    "phash": h,
+                    "timestamp": str(r.get("created_at", ""))
+                })
+        return results
+    except Exception as e:
+        print(f"[DB Warning] get_historical_phashes error: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def log_authenticity_audit(
+    image_name: str,
+    phash: str,
+    authenticity_score: float,
+    status: str,
+    status_code: str,
+    bullet_summary: List[str],
+    report_dict: Dict[str, Any]
+) -> int:
+    """
+    Persists an image authenticity verification report into the database for auditability.
+    """
+    init_db()
+    conn, db_type = get_db_connection()
+    import json
+    bullet_str = json.dumps(bullet_summary)
+    slim_report = {k: v for k, v in report_dict.items() if k != "ela_visualization_b64"}
+    report_json_str = json.dumps(slim_report)
+
+    try:
+        if db_type == "mysql":
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO authenticity_audits 
+                    (image_name, phash, authenticity_score, status, status_code, bullet_summary, report_json)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (image_name, phash, authenticity_score, status, status_code, bullet_str, report_json_str))
+                return cursor.lastrowid
+        else:
+            with conn:
+                cur = conn.execute("""
+                    INSERT INTO authenticity_audits 
+                    (image_name, phash, authenticity_score, status, status_code, bullet_summary, report_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (image_name, phash, authenticity_score, status, status_code, bullet_str, report_json_str))
+                return cur.lastrowid
+    except Exception as e:
+        print(f"[DB Error] log_authenticity_audit error: {e}")
+        return -1
+    finally:
+        conn.close()
+
+
+def get_authenticity_history(limit: int = 20) -> List[Dict[str, Any]]:
+    """
+    Fetches recent authenticity audit reports from database.
+    """
+    init_db()
+    conn, db_type = get_db_connection()
+    import json
+    try:
+        if db_type == "mysql":
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT * FROM authenticity_audits ORDER BY id DESC LIMIT %s", (limit,))
+                rows = cursor.fetchall()
+        else:
+            cursor = conn.execute("SELECT * FROM authenticity_audits ORDER BY id DESC LIMIT ?", (limit,))
+            rows = [dict(r) for r in cursor.fetchall()]
+
+        audits = []
+        for r in rows:
+            rd = dict(r)
+            try:
+                rd["bullet_summary"] = json.loads(rd.get("bullet_summary") or "[]")
+            except Exception:
+                rd["bullet_summary"] = []
+            try:
+                rd["report_json"] = json.loads(rd.get("report_json") or "{}")
+            except Exception:
+                rd["report_json"] = {}
+            audits.append(rd)
+        return audits
+    except Exception as e:
+        print(f"[DB Error] get_authenticity_history error: {e}")
+        return []
     finally:
         conn.close()
 

@@ -26,7 +26,10 @@ try:
     from .traffic_engine import get_default_city_network, simulate_traffic_rerouting
     from .report_generator import generate_pdf_report
     from .authenticity_engine import analyze_photo_authenticity
-    from .db_manager import clear_all_detections, get_db_status, get_all_detections
+    from .db_manager import (
+        clear_all_detections, get_db_status, get_all_detections,
+        get_historical_phashes, log_authenticity_audit, get_authenticity_history
+    )
     from .auth import router as auth_router, get_current_user
 except ImportError as e:
     try:
@@ -34,7 +37,10 @@ except ImportError as e:
         from traffic_engine import get_default_city_network, simulate_traffic_rerouting
         from report_generator import generate_pdf_report
         from authenticity_engine import analyze_photo_authenticity
-        from db_manager import clear_all_detections, get_db_status, get_all_detections
+        from db_manager import (
+            clear_all_detections, get_db_status, get_all_detections,
+            get_historical_phashes, log_authenticity_audit, get_authenticity_history
+        )
         from auth import router as auth_router, get_current_user
     except Exception:
         raise RuntimeError(f"Failed to import core engines: {e}")
@@ -559,13 +565,15 @@ async def detect_image(
     # Check if user provided manual GPS or clicked Use My GPS
     has_manual_gps = (manual_lat is not None and manual_lon is not None and manual_lat != 0 and manual_lon != 0)
 
-    # 2. AUTHENTICITY PRE-CHECK: Reject processing if image is fake / AI-generated / tampered / screen photo / duplicate
+    # 2. AUTHENTICITY VERIFICATION PIPELINE (Step 1 of Road Hazard Perception)
     authenticity_info = None
     try:
+        historical_hashes = get_historical_phashes()
         authenticity_info = analyze_photo_authenticity(
             contents,
             filename=file.filename or "uploaded_hazard.jpg",
-            has_manual_gps=has_manual_gps
+            manual_gps=(manual_lat, manual_lon) if has_manual_gps else None,
+            historical_hashes=historical_hashes
         )
     except Exception as ex:
         print(f"[Authenticity Check Warning]: {ex}")
@@ -573,24 +581,13 @@ async def detect_image(
     is_fake = False
     rejection_reason = None
     if authenticity_info:
-        is_synthetic = authenticity_info.get("checks_summary", {}).get("ai_synthetic", {}).get("is_synthetic", False)
-        is_screen = authenticity_info.get("checks_summary", {}).get("screen_detection", {}).get("is_screen_photo", False)
-        is_duplicate = authenticity_info.get("checks_summary", {}).get("phash", {}).get("is_duplicate", False)
-        is_edited = authenticity_info.get("checks_summary", {}).get("ela_editing", {}).get("is_edited", False)
         score = authenticity_info.get("authenticity_score", 100.0)
-
-        # Flag if AI generated, screen photo, duplicate, or score < 45
-        if is_synthetic or is_screen or is_duplicate or score < 45.0:
+        status_code = authenticity_info.get("status_code", "")
+        # Only flag if composite score falls into High Risk category (< 40)
+        if score < 40.0 or status_code == "high_risk":
             is_fake = True
-            rejection_reason = "Fake / Suspicious Image Detected"
-            if is_synthetic:
-                rejection_reason = "Synthetic / AI-Generated Image Detected (Midjourney/DALL-E/Stable Diffusion)"
-            elif is_screen:
-                rejection_reason = "Screen / Monitor Re-photographed Display Detected (Moiré Grid Pattern)"
-            elif is_duplicate:
-                rejection_reason = "Duplicate Hazard Report Image (pHash Match Found)"
-            elif score < 45.0:
-                rejection_reason = f"Low Authenticity Score ({score}/100) — Image Tampered or Wiped Metadata"
+            threats = authenticity_info.get("threat_reasons", [])
+            rejection_reason = threats[0] if threats else f"High Risk Tampered Image ({score}/100)"
 
     # Priority: Manual User Provided GPS > Image EXIF GPS > Default Fallback (New Delhi)
     location_source = "Image EXIF GPS"
@@ -802,6 +799,10 @@ async def detect_image(
                 from .db_manager import insert_detection
             except ImportError:
                 from db_manager import insert_detection
+
+            current_phash = authenticity_info.get("checks_summary", {}).get("phash", {}).get("current_phash", "") if authenticity_info else ""
+            auth_score_val = authenticity_info.get("authenticity_score") if authenticity_info else None
+
             success, msg = insert_detection(
                 image_name=out_filename,
                 latitude=str(lat),
@@ -809,9 +810,25 @@ async def detect_image(
                 severity=highest_severity,
                 confidence=max_conf,
                 time_val=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                user_id=current_user["id"]
+                user_id=current_user["id"],
+                phash=current_phash,
+                authenticity_score=auth_score_val
             )
             print(f"[DB AUTO-INSERT LOG]: {msg}")
+
+            if authenticity_info:
+                try:
+                    log_authenticity_audit(
+                        image_name=out_filename,
+                        phash=current_phash,
+                        authenticity_score=auth_score_val or 100.0,
+                        status=authenticity_info.get("status", "HIGHLY AUTHENTIC"),
+                        status_code=authenticity_info.get("status_code", "highly_authentic"),
+                        bullet_summary=authenticity_info.get("bullet_summary", []),
+                        report_dict=authenticity_info
+                    )
+                except Exception as audit_err:
+                    print(f"[DB AUTHENTICITY AUDIT LOG ERROR]: {audit_err}")
         except Exception as dberr:
             print(f"[DB AUTO-INSERT ERROR]: {dberr}")
 
@@ -848,19 +865,56 @@ async def detect_image(
     }
 
 @app.post("/api/authenticity/analyze")
-async def analyze_authenticity_endpoint(file: UploadFile = File(...)):
+async def analyze_authenticity_endpoint(
+    file: UploadFile = File(...),
+    threshold: float = Form(88.0),
+    manual_lat: Optional[float] = Form(None),
+    manual_lon: Optional[float] = Form(None)
+):
     is_image_mime = file.content_type and file.content_type.startswith("image/")
     is_image_ext = file.filename and file.filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".bmp"))
 
     if not is_image_mime and not is_image_ext:
-        raise HTTPException(status_code=400, detail="Uploaded file must be a valid image (JPG, PNG, WEBP).")
+        raise HTTPException(status_code=400, detail="Uploaded file must be a valid image (JPG, JPEG, PNG, WEBP).")
 
     contents = await file.read()
     try:
-        res = analyze_photo_authenticity(contents, filename=file.filename or "hazard_photo.jpg")
+        historical_hashes = get_historical_phashes()
+        manual_gps_tuple = (manual_lat, manual_lon) if (manual_lat is not None and manual_lon is not None) else None
+        res = analyze_photo_authenticity(
+            contents,
+            filename=file.filename or "hazard_photo.jpg",
+            manual_gps=manual_gps_tuple,
+            similarity_threshold=threshold,
+            historical_hashes=historical_hashes
+        )
+        # Log audit to database
+        try:
+            current_phash = res.get("checks_summary", {}).get("phash", {}).get("current_phash", "")
+            log_authenticity_audit(
+                image_name=file.filename or "hazard_photo.jpg",
+                phash=current_phash,
+                authenticity_score=res.get("authenticity_score", 100.0),
+                status=res.get("status", "HIGHLY AUTHENTIC"),
+                status_code=res.get("status_code", "highly_authentic"),
+                bullet_summary=res.get("bullet_summary", []),
+                report_dict=res
+            )
+        except Exception as audit_err:
+            print(f"[Authenticity Audit Log Warning]: {audit_err}")
+
         return res
     except Exception as ex:
         raise HTTPException(status_code=500, detail=f"Authenticity engine analysis failed: {ex}")
+
+
+@app.get("/api/authenticity/history")
+async def get_authenticity_history_endpoint(limit: int = 20):
+    try:
+        audits = get_authenticity_history(limit=limit)
+        return {"audits": audits, "total": len(audits)}
+    except Exception as ex:
+        return {"audits": [], "total": 0, "error": str(ex)}
 
 
 @app.post("/api/report/pdf")
