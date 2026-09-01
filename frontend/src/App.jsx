@@ -9,6 +9,7 @@ import RiskCalculatorView from './components/RiskCalculatorView';
 import ReportGeneratorView from './components/ReportGeneratorView';
 import AuthenticityVerifierView from './components/AuthenticityVerifierView';
 import MyReportsView from './components/MyReportsView';
+import PublicNavbar from './components/PublicNavbar';
 import UserProfileModal from './components/UserProfileModal';
 import AuthPortal from './components/AuthPortal';
 import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, Lock, KeyRound, ArrowUpRight, Loader } from 'lucide-react';
@@ -254,6 +255,59 @@ export default function App() {
     );
   }
 
+  // --- PUBLIC CITIZEN PORTAL (Clean, Simple UI with Top Navbar) ---
+  if (userRole === 'public') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-background)' }}>
+        {/* Clean Citizen Top Navbar */}
+        <PublicNavbar 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          user={user} 
+          onSwitchPortal={handleSwitchPortal} 
+          onOpenProfile={() => setShowProfileModal(true)} 
+          onLogout={handleLogout} 
+        />
+
+        {/* Public Citizen Content Area */}
+        <main style={{ flex: 1, maxWidth: '1240px', margin: '0 auto', width: '100%', padding: '24px 20px' }}>
+          {activeTab === 'detection' && (
+            <AIDetectionView 
+              userRole={userRole} 
+              onNavigateToAuthenticity={() => setActiveTab('authenticity')}
+              onNavigateToReports={() => setActiveTab('my-reports')}
+            />
+          )}
+          {activeTab === 'my-reports' && (
+            <MyReportsView 
+              userRole={userRole} 
+              onNavigateToDetection={() => setActiveTab('detection')} 
+            />
+          )}
+          {activeTab === 'authenticity' && (
+            <AuthenticityVerifierView 
+              onNavigateToDetection={(file) => setActiveTab('detection')} 
+            />
+          )}
+          {activeTab === 'digital-twin' && <DigitalTwinMapView />}
+        </main>
+
+        {showProfileModal && (
+          <UserProfileModal 
+            user={user}
+            onClose={() => setShowProfileModal(false)}
+            onLogout={handleLogout}
+            onUpgradeSuccess={(updatedUser) => {
+              setUser(updatedUser);
+              setUserRole(updatedUser.role);
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // --- AUTHORITY ADMIN PORTAL (Full Operations Dashboard with Sidebar & Telemetry) ---
   return (
     <div className="app-container">
       <Sidebar 

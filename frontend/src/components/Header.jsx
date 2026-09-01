@@ -16,19 +16,23 @@ export default function Header({ title, subtitle, summaryStats, userRole, user, 
       </div>
 
       <div className="header-telemetry">
-        <div className="telemetry-chip">
-          <Wifi size={15} color="#10B981" />
-          <span>Server Status:</span>
-          <span className="telemetry-val" style={{ color: '#10B981' }}>Connected</span>
-        </div>
+        {userRole === 'admin' && (
+          <>
+            <div className="telemetry-chip">
+              <Wifi size={15} color="#10B981" />
+              <span>Server Status:</span>
+              <span className="telemetry-val" style={{ color: '#10B981' }}>Connected</span>
+            </div>
 
-        <div className="telemetry-chip">
-          <CloudRain size={15} color="#38BDF8" />
-          <span>Weather:</span>
-          <span className="telemetry-val" style={{ color: '#38BDF8' }}>
-            {summaryStats?.weather_condition || 'Live GIS'}
-          </span>
-        </div>
+            <div className="telemetry-chip">
+              <CloudRain size={15} color="#38BDF8" />
+              <span>Weather:</span>
+              <span className="telemetry-val" style={{ color: '#38BDF8' }}>
+                {summaryStats?.weather_condition || 'Live GIS'}
+              </span>
+            </div>
+          </>
+        )}
 
         {/* User Account / Profile Card */}
         {user && (
