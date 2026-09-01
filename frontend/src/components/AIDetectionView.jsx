@@ -345,32 +345,67 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
             </div>
           ) : (
             <div>
+              {/* PHOTO UPLOAD & CAPTURE DROPZONE */}
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                accept="image/*" 
+                style={{ display: 'none' }} 
+              />
+
               <div 
+                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                onDragOver={(e) => { e.preventDefault(); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    const file = e.dataTransfer.files[0];
+                    setSelectedFile(file);
+                    setPreviewUrl(URL.createObjectURL(file));
+                    setDetectionResult(null);
+                  }
+                }}
                 style={{
-                  padding: '24px',
-                  background: 'rgba(24, 24, 27, 0.5)',
-                  border: userRole === 'public' ? '1px dashed rgba(0, 230, 180, 0.2)' : '1px dashed rgba(245, 158, 11, 0.2)',
+                  padding: '24px 16px',
+                  background: 'rgba(24, 24, 27, 0.6)',
+                  border: selectedFile ? '1px solid rgba(0, 230, 180, 0.4)' : '2px dashed rgba(0, 230, 180, 0.3)',
                   borderRadius: '12px',
                   textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  position: 'relative',
                   marginBottom: '14px'
                 }}
               >
                 {previewUrl ? (
-                  <img src={previewUrl} alt="Preview" style={{ maxHeight: '160px', borderRadius: '10px', objectFit: 'contain' }} />
+                  <div>
+                    <img 
+                      src={previewUrl} 
+                      alt="Uploaded Road Hazard Preview" 
+                      style={{ maxHeight: '170px', maxWidth: '100%', borderRadius: '8px', objectFit: 'contain', border: '1px solid rgba(255,255,255,0.1)' }} 
+                    />
+                    <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.78rem', color: '#00E6B4', fontWeight: 600 }}>✓ {selectedFile?.name}</span>
+                      <span style={{ fontSize: '0.7rem', color: '#71717a' }}>({(selectedFile?.size / 1024).toFixed(0)} KB)</span>
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: '#a1a1aa', marginTop: '4px' }}>Click to select a different photo</div>
+                  </div>
                 ) : (
-                  userRole === 'public' ? (
-                    <div>
-                      <Camera size={34} color="#00E6B4" style={{ marginBottom: '8px' }} />
-                      <p style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem' }}>No Active Capture</p>
-                      <p style={{ fontSize: '0.75rem', color: '#71717a', marginTop: '4px' }}>Click "Live WebCam" below to start the camera and capture a road photo.</p>
+                  <div>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(0, 230, 180, 0.12)', border: '1px solid rgba(0, 230, 180, 0.25)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
+                      <Upload size={22} color="#00E6B4" />
                     </div>
-                  ) : (
-                    <div>
-                      <Lock size={34} color="#F59E0B" style={{ marginBottom: '8px' }} />
-                      <p style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem' }}>Scanner Restricted</p>
-                      <p style={{ fontSize: '0.75rem', color: '#71717a', marginTop: '4px' }}>Live WebCam scanner is restricted to the Citizen Portal. Admins cannot scan road hazards directly.</p>
+                    <p style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem', margin: 0 }}>
+                      Click to Upload Road Hazard Photo
+                    </p>
+                    <p style={{ fontSize: '0.76rem', color: '#a1a1aa', marginTop: '4px', margin: 0 }}>
+                      or Drag & Drop image file here (JPG, PNG, WEBP)
+                    </p>
+                    <div style={{ marginTop: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '20px', background: '#18181b', border: '1px solid #27272a', fontSize: '0.72rem', color: '#00E6B4' }}>
+                      <Sparkles size={12} /> Auto-extracts EXIF GPS Geotags & Camera Metadata
                     </div>
-                  )
+                  </div>
                 )}
               </div>
 
@@ -494,17 +529,33 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
               <div style={{ marginTop: '14px', display: 'flex', gap: '10px' }}>
                 <button 
                   className="btn-primary" 
-                  disabled={!selectedFile || isProcessing || (exifWarning && !manualLat && !landmarkName)}
+                  disabled={!selectedFile || isProcessing}
                   onClick={handleRunDetection}
-                  style={{ flex: 1, opacity: (!selectedFile || isProcessing || (exifWarning && !manualLat && !landmarkName)) ? 0.6 : 1 }}
+                  style={{ flex: 2, opacity: (!selectedFile || isProcessing) ? 0.6 : 1, padding: '10px 14px', gap: '8px', fontSize: '0.84rem' }}
                 >
                   {isProcessing ? <RefreshCw className="spin" size={16} /> : <Sparkles size={16} />}
-                  {isProcessing ? 'Evaluating Model...' : 'Run AI Hazard Scanner'}
+                  {isProcessing ? 'Evaluating Model & Authenticity...' : 'Run AI Hazard Scanner'}
+                </button>
+
+                <button 
+                  type="button"
+                  className="btn-secondary" 
+                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                  style={{ flex: 1, padding: '10px', gap: '6px', fontSize: '0.8rem' }}
+                  title="Browse photo file from device"
+                >
+                  <Upload size={15} color="#00E6B4" /> Browse File
                 </button>
 
                 {userRole === 'public' && (
-                  <button className="btn-secondary" onClick={startCamera}>
-                    <Camera size={16} /> Live WebCam
+                  <button 
+                    type="button"
+                    className="btn-secondary" 
+                    onClick={startCamera}
+                    style={{ flex: 1, padding: '10px', gap: '6px', fontSize: '0.8rem' }}
+                    title="Open Camera / Live WebCam"
+                  >
+                    <Camera size={15} color="#38BDF8" /> Camera
                   </button>
                 )}
               </div>
