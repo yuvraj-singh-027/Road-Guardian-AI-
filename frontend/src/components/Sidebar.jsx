@@ -12,7 +12,15 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
     { id: 'municipal-report', label: 'Audit PDF Generator', icon: FileText, publicAccess: false, badge: 'Export' },
   ];
 
-  const navItems = allNavItems;
+  const navItems = allNavItems.filter(item => {
+    if (userRole === 'public') {
+      // Available exclusively on Citizen Public Portal
+      return item.id === 'detection' || item.id === 'my-reports' || item.id === 'authenticity' || item.id === 'digital-twin';
+    } else {
+      // Authority Admin Portal: strictly excludes citizen personal tracking
+      return item.id !== 'my-reports' && item.id !== 'detection';
+    }
+  });
 
   return (
     <aside className="sidebar">
