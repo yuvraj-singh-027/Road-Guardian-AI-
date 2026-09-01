@@ -9,6 +9,7 @@ import RiskCalculatorView from './components/RiskCalculatorView';
 import ReportGeneratorView from './components/ReportGeneratorView';
 import AuthenticityVerifierView from './components/AuthenticityVerifierView';
 import MyReportsView from './components/MyReportsView';
+import PublicFeedHistoryView from './components/PublicFeedHistoryView';
 import PublicNavbar from './components/PublicNavbar';
 import UserProfileModal from './components/UserProfileModal';
 import AuthPortal from './components/AuthPortal';
@@ -161,6 +162,11 @@ export default function App() {
           title: userRole === 'admin' ? 'Authority Road Hazard Complaint Registry' : 'My Road Hazard Reports & Tracking',
           subtitle: 'Track real-time lifecycle stages, municipal assignment, repair progress, and AI reverification for submitted reports'
         };
+      case 'public-feed':
+        return {
+          title: 'Recent Geotagged Public Reports (Live Feed)',
+          subtitle: 'Live city-wide telemetry feed of verified road hazard reports, severity distribution, and spatial analytics'
+        };
       case 'authenticity':
         return {
           title: 'Image Authenticity Verification Engine',
@@ -284,6 +290,12 @@ export default function App() {
               onNavigateToDetection={() => setActiveTab('detection')} 
             />
           )}
+          {activeTab === 'public-feed' && (
+            <PublicFeedHistoryView 
+              onNavigateToReport={() => setActiveTab('detection')} 
+              onNavigateToMap={() => setActiveTab('digital-twin')} 
+            />
+          )}
           {activeTab === 'authenticity' && (
             <AuthenticityVerifierView 
               onNavigateToDetection={(file) => setActiveTab('detection')} 
@@ -394,6 +406,12 @@ export default function App() {
           <MyReportsView 
             userRole={userRole} 
             onNavigateToDetection={() => setActiveTab('detection')} 
+          />
+        )}
+        {activeTab === 'public-feed' && (
+          <PublicFeedHistoryView 
+            onNavigateToReport={() => setActiveTab('detection')} 
+            onNavigateToMap={() => setActiveTab('digital-twin')} 
           />
         )}
         {activeTab === 'authenticity' && (

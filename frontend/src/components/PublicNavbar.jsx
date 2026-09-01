@@ -1,13 +1,14 @@
 import React from 'react';
 import { 
   Camera, ClipboardList, ShieldCheck, Map, Activity, 
-  User, ShieldAlert, LogOut, Sparkles, ChevronRight
+  User, ShieldAlert, LogOut, Sparkles, ChevronRight, History
 } from 'lucide-react';
 
 export default function PublicNavbar({ activeTab, setActiveTab, user, onSwitchPortal, onOpenProfile, onLogout }) {
   const navLinks = [
     { id: 'detection', label: 'Report Hazard & Scan', icon: Camera, badge: 'AI Vision' },
     { id: 'my-reports', label: 'My Reports & Tracking', icon: ClipboardList, badge: 'Lifecycle' },
+    { id: 'public-feed', label: 'Incident History (Live Feed)', icon: History, badge: 'Live Feed' },
     { id: 'digital-twin', label: 'Live City Map', icon: Map, badge: 'Spatial' },
   ];
 
