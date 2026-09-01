@@ -99,6 +99,98 @@ def verify_password(password: str, hashed: str) -> bool:
     except Exception:
         return False
 
+# Supabase Auth Configuration
+SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").rstrip("/")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY") or ""
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET") or ""
+
+def is_supabase_auth_enabled() -> bool:
+    return bool(SUPABASE_URL and (SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY))
+
+def supabase_auth_signup(email: str, password: str, name: str, role: str = "public") -> Tuple[bool, Optional[dict], Optional[str]]:
+    """Registers user via Supabase GoTrue Auth REST API."""
+    if not is_supabase_auth_enabled():
+        return False, None, "Supabase Auth not configured."
+    try:
+        import requests
+        url = f"{SUPABASE_URL}/auth/v1/signup"
+        headers = {
+            "apikey": SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY,
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "email": email,
+            "password": password,
+            "data": {
+                "name": name,
+                "role": role,
+                "full_name": name
+            }
+        }
+        res = requests.post(url, json=payload, headers=headers, timeout=6)
+        data = res.json()
+        if res.status_code in [200, 201]:
+            return True, data, None
+        return False, None, data.get("msg") or data.get("error_description") or data.get("message") or "Supabase Auth signup failed."
+    except Exception as ex:
+        return False, None, str(ex)
+
+def supabase_auth_login(email: str, password: str) -> Tuple[bool, Optional[dict], Optional[str]]:
+    """Authenticates user via Supabase GoTrue Auth REST API."""
+    if not is_supabase_auth_enabled():
+        return False, None, "Supabase Auth not configured."
+    try:
+        import requests
+        url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"
+        headers = {
+            "apikey": SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY,
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "email": email,
+            "password": password
+        }
+        res = requests.post(url, json=payload, headers=headers, timeout=6)
+        data = res.json()
+        if res.status_code == 200 and "access_token" in data:
+            return True, data, None
+        return False, None, data.get("error_description") or data.get("msg") or data.get("message") or "Invalid email or password."
+    except Exception as ex:
+        return False, None, str(ex)
+
+def supabase_verify_token(token: str) -> Optional[dict]:
+    """Validates Supabase token against Supabase Auth /auth/v1/user endpoint or JWT secret."""
+    if not token:
+        return None
+    # 1. Try decoding with SUPABASE_JWT_SECRET if provided
+    if SUPABASE_JWT_SECRET:
+        try:
+            return jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
+        except Exception:
+            pass
+    # 2. Query Supabase /auth/v1/user
+    if is_supabase_auth_enabled():
+        try:
+            import requests
+            url = f"{SUPABASE_URL}/auth/v1/user"
+            headers = {
+                "apikey": SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY,
+                "Authorization": f"Bearer {token}"
+            }
+            res = requests.get(url, headers=headers, timeout=3)
+            if res.status_code == 200:
+                user_data = res.json()
+                return {
+                    "sub": user_data.get("id"),
+                    "email": user_data.get("email"),
+                    "role": user_data.get("user_metadata", {}).get("role", "public"),
+                    "name": user_data.get("user_metadata", {}).get("name", "")
+                }
+        except Exception:
+            pass
+    return None
+
 def create_access_token(data: dict) -> str:
     """Creates a JWT token."""
     expire = datetime.datetime.utcnow() + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -107,12 +199,20 @@ def create_access_token(data: dict) -> str:
     return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 def decode_access_token(token: str) -> Optional[dict]:
-    """Decodes and verifies a JWT token."""
+    """Decodes and verifies a JWT token (supporting both standard HS256 and Supabase Auth)."""
+    # 1. Standard application JWT
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         return payload
     except jwt.PyJWTError:
-        return None
+        pass
+
+    # 2. Supabase Auth token verification
+    supabase_payload = supabase_verify_token(token)
+    if supabase_payload:
+        return supabase_payload
+
+    return None
 
 # --- Email Notifications ---
 
@@ -353,13 +453,21 @@ async def get_current_user(request: Request) -> dict:
     if not payload or "sub" not in payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token.")
 
+    # 3. Load user from database (supporting both numeric ID and Supabase UUID/email)
+    user = None
     try:
         user_id = int(payload["sub"])
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid token payload.")
+        user = get_user_by_id(user_id)
+    except (ValueError, TypeError):
+        email = payload.get("email")
+        if email:
+            user = get_user_by_email(email)
+            if not user:
+                role = payload.get("role") or "public"
+                name = payload.get("name") or email.split("@")[0]
+                create_user(name=name, email=email, password="", role=role, is_verified=1)
+                user = get_user_by_email(email)
 
-    # 3. Load user from database
-    user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=401, detail="User account not found.")
 
@@ -393,33 +501,74 @@ async def signup(req: SignUpRequest):
         else:
             raise HTTPException(status_code=400, detail="Invalid Authority Admin Passcode.")
 
-    # Create account (not verified by default)
+    # 1. If Supabase Auth is enabled, register through Supabase GoTrue Auth
+    supabase_res = None
+    if is_supabase_auth_enabled():
+        ok, data, err = supabase_auth_signup(req.email, req.password, req.name.strip(), role)
+        if not ok:
+            raise HTTPException(status_code=400, detail=err or "Supabase Auth registration failed.")
+        supabase_res = data
+
+    # 2. Mirror account into database
     success, user_id = create_user(
         name=req.name.strip(),
         email=req.email,
         password=req.password,
         role=role,
-        is_verified=0
+        is_verified=1 if is_supabase_auth_enabled() else 0
     )
 
     if not success or not user_id:
         raise HTTPException(status_code=500, detail="Database insertion failed. Try again.")
 
-    # Fetch token and send email
-    user = get_user_by_id(user_id)
-    verification_token = user.get("verification_token")
-    if verification_token:
-        send_verification_email(req.name.strip(), req.email, verification_token)
+    # Fetch token and send email if not using Supabase (Supabase handles emails automatically)
+    if not is_supabase_auth_enabled():
+        user = get_user_by_id(user_id)
+        verification_token = user.get("verification_token")
+        if verification_token:
+            send_verification_email(req.name.strip(), req.email, verification_token)
 
     return {
         "success": True,
-        "message": "Account created successfully. Please verify your email before logging in."
+        "message": "Account created successfully with Supabase Security!",
+        "supabase_auth": bool(supabase_res)
     }
 
 @router.post("/login")
 async def login(req: LoginRequest, response: Response):
     user = get_user_by_email(req.email)
+
+    # 1. If Supabase Auth is active, authenticate directly via Supabase GoTrue
+    if is_supabase_auth_enabled():
+        ok, sup_data, sup_err = supabase_auth_login(req.email, req.password)
+        if ok and sup_data and "access_token" in sup_data:
+            token = sup_data["access_token"]
+            if not user:
+                # Mirror to DB
+                create_user(name=req.email.split("@")[0], email=req.email, password="", role="public", is_verified=1)
+                user = get_user_by_email(req.email)
+
+            response.set_cookie(
+                key="road_guardian_token",
+                value=token,
+                httponly=True,
+                max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+                samesite="lax",
+                secure=False
+            )
+            return {
+                "success": True,
+                "token": token,
+                "token_type": "bearer",
+                "user": {
+                    "id": user["id"],
+                    "name": user["name"],
+                    "email": user["email"],
+                    "role": user["role"]
+                }
+            }
     
+    # 2. Standard Database Authentication fallback
     if not user:
         raise HTTPException(status_code=400, detail="Invalid email or password.")
 
@@ -431,7 +580,7 @@ async def login(req: LoginRequest, response: Response):
         raise HTTPException(status_code=400, detail="Invalid email or password.")
 
     # Verification guard
-    if not user.get("is_verified", 0):
+    if not user.get("is_verified", 0) and not is_supabase_auth_enabled():
         return JSONResponse(
             status_code=403,
             content={"success": False, "detail": "EMAIL_UNVERIFIED", "email": req.email}
