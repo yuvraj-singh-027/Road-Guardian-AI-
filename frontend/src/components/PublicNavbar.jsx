@@ -6,9 +6,8 @@ import {
 
 export default function PublicNavbar({ activeTab, setActiveTab, user, onSwitchPortal, onOpenProfile, onLogout }) {
   const navLinks = [
-    { id: 'detection', label: 'Report Hazard', icon: Camera, badge: 'AI Vision' },
+    { id: 'detection', label: 'Report Hazard & Scan', icon: Camera, badge: 'AI Vision' },
     { id: 'my-reports', label: 'My Reports & Tracking', icon: ClipboardList, badge: 'Lifecycle' },
-    { id: 'authenticity', label: 'Photo Authenticity', icon: ShieldCheck, badge: 'Forensics' },
     { id: 'digital-twin', label: 'Live City Map', icon: Map, badge: 'Spatial' },
   ];
 

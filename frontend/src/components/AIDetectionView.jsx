@@ -18,6 +18,7 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [detectionResult, setDetectionResult] = useState(null);
+  const [activeImageView, setActiveImageView] = useState('yolo'); // 'yolo' | 'original' | 'ela'
   const [fakeImageWarning, setFakeImageWarning] = useState(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [facingMode, setFacingMode] = useState('environment'); // environment (back) or user (front)
@@ -215,8 +216,8 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
         throw new Error(`API Error: ${data?.detail || response.statusText || 'Server Error'}`);
       }
  
-      setFakeImageWarning(null);
       setDetectionResult(data);
+      setActiveImageView('yolo');
       fetchHistory();
     } catch (err) {
       console.error(err);
@@ -522,59 +523,209 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
             )}
           </div>
 
-          {fakeImageWarning ? (
-            <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '12px', border: '1px solid #EF4444' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                <div style={{ background: '#EF4444', color: '#fff', borderRadius: '50%', minWidth: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <AlertTriangle size={22} />
-                </div>
-                <div>
-                  <h4 style={{ color: '#F87171', fontSize: '1.02rem', fontWeight: 700, margin: 0 }}>
-                    {fakeImageWarning.title || '⛔ Submission Rejected: Fake / Tampered Image'}
-                  </h4>
-                  <p style={{ color: '#fca5a5', fontSize: '0.8rem', marginTop: '2px', margin: 0 }}>
-                    {fakeImageWarning.reason || 'This photo was flagged by the Authenticity Check Engine as AI-generated, screen-captured, or digitally altered.'}
-                  </p>
-                </div>
-              </div>
-
-              {fakeImageWarning.authenticity && (
-                <div style={{ background: '#18181b', padding: '12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.3)', marginBottom: '12px' }}>
+          {detectionResult ? (
+            <div>
+              {/* STAGE 1: AUTHENTICITY VERIFICATION WARNING / BANNER */}
+              {detectionResult.authenticity && (
+                <div style={{
+                  marginBottom: '14px',
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  border: (detectionResult.is_fake || detectionResult.authenticity.status_code === 'fake_detected' || detectionResult.authenticity.status_code === 'suspicious' || detectionResult.authenticity.authenticity_score < 70)
+                    ? '1px solid rgba(239, 68, 68, 0.6)'
+                    : '1px solid rgba(16, 185, 129, 0.4)',
+                  background: (detectionResult.is_fake || detectionResult.authenticity.status_code === 'fake_detected' || detectionResult.authenticity.status_code === 'suspicious' || detectionResult.authenticity.authenticity_score < 70)
+                    ? 'rgba(239, 68, 68, 0.1)'
+                    : 'rgba(16, 185, 129, 0.08)'
+                }}>
+                  {/* Warning Header */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '0.78rem', color: '#a1a1aa' }}>Authenticity Score:</span>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#EF4444' }}>
-                      {fakeImageWarning.authenticity.status_badge} {fakeImageWarning.authenticity.authenticity_score}/100 ({fakeImageWarning.authenticity.status})
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {(detectionResult.is_fake || detectionResult.authenticity.status_code === 'fake_detected' || detectionResult.authenticity.status_code === 'suspicious' || detectionResult.authenticity.authenticity_score < 70) ? (
+                        <div style={{ background: '#EF4444', color: '#fff', borderRadius: '50%', width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <AlertTriangle size={15} />
+                        </div>
+                      ) : (
+                        <div style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10B981', borderRadius: '50%', width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <ShieldCheck size={16} />
+                        </div>
+                      )}
+                      <div>
+                        <div style={{
+                          fontWeight: 700,
+                          fontSize: '0.86rem',
+                          color: (detectionResult.is_fake || detectionResult.authenticity.status_code === 'fake_detected' || detectionResult.authenticity.status_code === 'suspicious' || detectionResult.authenticity.authenticity_score < 70)
+                            ? '#F87171'
+                            : '#10B981'
+                        }}>
+                          {(detectionResult.is_fake || detectionResult.authenticity.status_code === 'fake_detected')
+                            ? '⚠️ FAKE / FRAUDULENT IMAGE DETECTED'
+                            : (detectionResult.authenticity.status_code === 'suspicious')
+                            ? '⚠️ SUSPICIOUS / UNVERIFIED PHOTO'
+                            : '🛡️ PHYSICAL CAMERA PHOTO VERIFIED'}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: '#a1a1aa' }}>
+                          Stage 1 Authenticity Score: <strong style={{ color: '#fff' }}>{detectionResult.authenticity.authenticity_score}/100</strong> ({detectionResult.authenticity.status})
+                        </div>
+                      </div>
+                    </div>
+
+                    <span className={`badge ${detectionResult.authenticity.status_color === 'green' ? 'badge-healthy' : detectionResult.authenticity.status_color === 'yellow' ? 'badge-degraded' : 'badge-critical'}`} style={{ fontSize: '0.72rem' }}>
+                      {detectionResult.authenticity.status_badge} {detectionResult.authenticity.status}
                     </span>
                   </div>
 
-                  <div style={{ fontSize: '0.75rem', color: '#F87171', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {fakeImageWarning.authenticity.threat_reasons?.map((reason, idx) => (
-                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>⚠️</span> <span>{reason}</span>
-                      </div>
-                    ))}
+                  {/* Threat Reason Warnings if Fake */}
+                  {detectionResult.authenticity.threat_reasons?.length > 0 && (
+                    <div style={{
+                      marginTop: '8px',
+                      padding: '8px 10px',
+                      background: 'rgba(0,0,0,0.4)',
+                      borderRadius: '6px',
+                      fontSize: '0.74rem',
+                      color: '#FCA5A5',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}>
+                      <div style={{ fontWeight: 600, color: '#EF4444' }}>Forensic Threat Factors Flagged:</div>
+                      {detectionResult.authenticity.threat_reasons.map((reason, idx) => (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>❌</span> <span>{reason}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 6-Point Forensic Checklist Matrix */}
+                  <div className="grid-3" style={{ gap: '6px', fontSize: '0.72rem', marginTop: '8px' }}>
+                    <div style={{ background: '#18181b', padding: '5px 8px', borderRadius: '6px', border: '1px solid #27272a' }}>
+                      <span style={{ color: '#71717a' }}>📷 Camera: </span>
+                      <strong style={{ color: detectionResult.authenticity.checks_summary?.exif?.exif_valid ? '#10B981' : '#F59E0B' }}>
+                        {detectionResult.authenticity.checks_summary?.exif?.camera_make || 'Generic'}
+                      </strong>
+                    </div>
+                    <div style={{ background: '#18181b', padding: '5px 8px', borderRadius: '6px', border: '1px solid #27272a' }}>
+                      <span style={{ color: '#71717a' }}>📍 Geotag: </span>
+                      <strong style={{ color: detectionResult.authenticity.checks_summary?.exif?.gps_valid ? '#10B981' : '#F59E0B' }}>
+                        {detectionResult.authenticity.checks_summary?.exif?.gps_valid ? 'GPS Verified' : 'Missing'}
+                      </strong>
+                    </div>
+                    <div style={{ background: '#18181b', padding: '5px 8px', borderRadius: '6px', border: '1px solid #27272a' }}>
+                      <span style={{ color: '#71717a' }}>🖥️ Moiré: </span>
+                      <strong style={{ color: detectionResult.authenticity.checks_summary?.screen_detection?.is_screen_photo ? '#EF4444' : '#10B981' }}>
+                        {detectionResult.authenticity.checks_summary?.screen_detection?.is_screen_photo ? 'Screen Photo' : 'Physical'}
+                      </strong>
+                    </div>
+                    <div style={{ background: '#18181b', padding: '5px 8px', borderRadius: '6px', border: '1px solid #27272a' }}>
+                      <span style={{ color: '#71717a' }}>🔬 ELA: </span>
+                      <strong style={{ color: detectionResult.authenticity.checks_summary?.ela_editing?.is_edited ? '#EF4444' : '#10B981' }}>
+                        {detectionResult.authenticity.checks_summary?.ela_editing?.is_edited ? 'Edited/Spliced' : 'Intact'}
+                      </strong>
+                    </div>
+                    <div style={{ background: '#18181b', padding: '5px 8px', borderRadius: '6px', border: '1px solid #27272a' }}>
+                      <span style={{ color: '#71717a' }}>🤖 AI Synthetic: </span>
+                      <strong style={{ color: detectionResult.authenticity.checks_summary?.ai_synthetic?.is_synthetic ? '#EF4444' : '#10B981' }}>
+                        {detectionResult.authenticity.checks_summary?.ai_synthetic?.is_synthetic ? 'Synthetic AI' : 'Real Scene'}
+                      </strong>
+                    </div>
+                    <div style={{ background: '#18181b', padding: '5px 8px', borderRadius: '6px', border: '1px solid #27272a' }}>
+                      <span style={{ color: '#71717a' }}>🔍 pHash: </span>
+                      <strong style={{ color: detectionResult.authenticity.checks_summary?.phash?.is_duplicate ? '#EF4444' : '#10B981' }}>
+                        {detectionResult.authenticity.checks_summary?.phash?.is_duplicate ? 'Duplicate' : 'Unique'}
+                      </strong>
+                    </div>
                   </div>
                 </div>
               )}
 
-              <button 
-                className="btn-secondary" 
-                onClick={() => setFakeImageWarning(null)}
-                style={{ width: '100%', borderColor: 'rgba(239,68,68,0.4)', color: '#F87171', fontSize: '0.82rem', padding: '8px' }}
-              >
-                Clear Alert & Upload Authentic Field Camera Photo
-              </button>
-            </div>
-          ) : detectionResult ? (
-            <div>
-              <div style={{ textAlign: 'center', marginBottom: '14px' }}>
-                <img 
-                  src={detectionResult.annotated_image_b64} 
-                  alt="Detection Output" 
-                  style={{ width: '100%', maxHeight: '200px', borderRadius: '10px', objectFit: 'contain', border: '1px solid rgba(0,230,180,0.3)' }} 
-                />
+              {/* IMAGE VIEW SWITCHER TABS */}
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                <button
+                  onClick={() => setActiveImageView('yolo')}
+                  style={{
+                    flex: 1,
+                    padding: '6px',
+                    borderRadius: '6px',
+                    border: '1px solid #27272a',
+                    background: activeImageView === 'yolo' ? 'rgba(0, 230, 180, 0.15)' : '#18181b',
+                    color: activeImageView === 'yolo' ? '#00E6B4' : '#a1a1aa',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  🤖 YOLO Vision Detections
+                </button>
+
+                {previewUrl && (
+                  <button
+                    onClick={() => setActiveImageView('original')}
+                    style={{
+                      flex: 1,
+                      padding: '6px',
+                      borderRadius: '6px',
+                      border: '1px solid #27272a',
+                      background: activeImageView === 'original' ? 'rgba(56, 189, 248, 0.15)' : '#18181b',
+                      color: activeImageView === 'original' ? '#38BDF8' : '#a1a1aa',
+                      fontSize: '0.74rem',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    📷 Original Photo
+                  </button>
+                )}
+
+                {detectionResult.authenticity?.ela_image_b64 && (
+                  <button
+                    onClick={() => setActiveImageView('ela')}
+                    style={{
+                      flex: 1,
+                      padding: '6px',
+                      borderRadius: '6px',
+                      border: '1px solid #27272a',
+                      background: activeImageView === 'ela' ? 'rgba(168, 85, 247, 0.2)' : '#18181b',
+                      color: activeImageView === 'ela' ? '#C084FC' : '#a1a1aa',
+                      fontSize: '0.74rem',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🔬 ELA Error Map
+                  </button>
+                )}
               </div>
 
+              {/* Active Image Render */}
+              <div style={{ textAlign: 'center', marginBottom: '14px', position: 'relative' }}>
+                <img 
+                  src={
+                    activeImageView === 'ela' && detectionResult.authenticity?.ela_image_b64
+                      ? detectionResult.authenticity.ela_image_b64
+                      : activeImageView === 'original' && previewUrl
+                      ? previewUrl
+                      : detectionResult.annotated_image_b64
+                  } 
+                  alt="Detection Output" 
+                  style={{ width: '100%', maxHeight: '220px', borderRadius: '10px', objectFit: 'contain', border: '1px solid rgba(0,230,180,0.3)', background: '#09090b' }} 
+                />
+                <div style={{
+                  position: 'absolute',
+                  bottom: '8px',
+                  right: '8px',
+                  background: 'rgba(0,0,0,0.75)',
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  fontSize: '0.68rem',
+                  color: '#e4e4e7',
+                  border: '1px solid rgba(255,255,255,0.1)'
+                }}>
+                  {activeImageView === 'yolo' ? 'YOLO Overlay' : activeImageView === 'ela' ? 'ELA Error Heatmap' : 'Raw Sensor Photo'}
+                </div>
+              </div>
+
+              {/* STAGE 2: YOLO HAZARD METRICS */}
               <div className="grid-2" style={{ gap: '10px', marginBottom: '12px' }}>
                 <div style={{ background: '#18181b', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-muted)' }}>
                   <div style={{ fontSize: '0.7rem', color: '#71717a', textTransform: 'uppercase', fontWeight: 600 }}>HAZARDS DETECTED</div>
@@ -605,94 +756,15 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
                 </div>
               </div>
 
-              {/* Photo Authenticity Check Engine Result */}
-              {detectionResult?.authenticity && (
-                <div style={{ marginTop: '12px', background: '#12131a', padding: '12px', borderRadius: '10px', border: `1px solid ${detectionResult.authenticity.status_color === 'green' ? 'rgba(16,185,129,0.3)' : detectionResult.authenticity.status_color === 'yellow' ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '0.82rem', color: '#fff', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <ShieldCheck size={16} color={detectionResult.authenticity.status_color === 'green' ? '#10B981' : detectionResult.authenticity.status_color === 'yellow' ? '#F59E0B' : '#EF4444'} />
-                      Authenticity Check Engine
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', color: '#a1a1aa' }}>
-                        ⚡ {detectionResult.authenticity.processing_time_ms}ms
-                      </span>
-                      <span className={`badge ${detectionResult.authenticity.status_color === 'green' ? 'badge-healthy' : detectionResult.authenticity.status_color === 'yellow' ? 'badge-degraded' : 'badge-critical'}`} style={{ fontSize: '0.72rem' }}>
-                        {detectionResult.authenticity.status_badge} {detectionResult.authenticity.status} ({detectionResult.authenticity.authenticity_score}/100)
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 6-Point Inspection Matrix Grid */}
-                  <div className="grid-2" style={{ gap: '6px', fontSize: '0.75rem', marginBottom: '8px' }}>
-                    <div style={{ background: '#18181b', padding: '6px 8px', borderRadius: '6px', border: '1px solid #27272a' }}>
-                      <span style={{ color: '#a1a1aa' }}>📷 Camera: </span>
-                      <strong style={{ color: detectionResult.authenticity.checks_summary?.exif?.exif_valid ? '#10B981' : '#F59E0B' }}>
-                        {detectionResult.authenticity.checks_summary?.exif?.camera_make || 'Generic'} {detectionResult.authenticity.checks_summary?.exif?.camera_model || ''}
-                      </strong>
-                    </div>
-                    <div style={{ background: '#18181b', padding: '6px 8px', borderRadius: '6px', border: '1px solid #27272a' }}>
-                      <span style={{ color: '#a1a1aa' }}>📍 Geotag: </span>
-                      <strong style={{ color: detectionResult.authenticity.checks_summary?.exif?.gps_valid ? '#10B981' : '#F59E0B' }}>
-                        {detectionResult.authenticity.checks_summary?.exif?.gps_valid ? 'Verified EXIF GPS' : 'Missing Geotag'}
-                      </strong>
-                    </div>
-                    <div style={{ background: '#18181b', padding: '6px 8px', borderRadius: '6px', border: '1px solid #27272a' }}>
-                      <span style={{ color: '#a1a1aa' }}>🔍 pHash: </span>
-                      <strong style={{ color: detectionResult.authenticity.checks_summary?.phash?.is_duplicate ? '#EF4444' : '#10B981' }}>
-                        {detectionResult.authenticity.checks_summary?.phash?.is_duplicate ? 'DUPLICATE' : 'Unique Hash'}
-                      </strong>
-                    </div>
-                    <div style={{ background: '#18181b', padding: '6px 8px', borderRadius: '6px', border: '1px solid #27272a' }}>
-                      <span style={{ color: '#a1a1aa' }}>🖥️ Screen Moiré: </span>
-                      <strong style={{ color: detectionResult.authenticity.checks_summary?.screen_detection?.is_screen_photo ? '#EF4444' : '#10B981' }}>
-                        {detectionResult.authenticity.checks_summary?.screen_detection?.is_screen_photo ? 'Screen Photo' : 'Physical Scene'}
-                      </strong>
-                    </div>
-                    <div style={{ background: '#18181b', padding: '6px 8px', borderRadius: '6px', border: '1px solid #27272a' }}>
-                      <span style={{ color: '#a1a1aa' }}>🧪 ELA Check: </span>
-                      <strong style={{ color: detectionResult.authenticity.checks_summary?.ela_editing?.is_edited ? '#EF4444' : '#10B981' }}>
-                        {detectionResult.authenticity.checks_summary?.ela_editing?.is_edited ? 'Splicing Signs' : 'Coherent JPEG'}
-                      </strong>
-                    </div>
-                    <div style={{ background: '#18181b', padding: '6px 8px', borderRadius: '6px', border: '1px solid #27272a' }}>
-                      <span style={{ color: '#a1a1aa' }}>🤖 AI Detector: </span>
-                      <strong style={{ color: detectionResult.authenticity.checks_summary?.ai_synthetic?.is_synthetic ? '#EF4444' : '#10B981' }}>
-                        {detectionResult.authenticity.checks_summary?.ai_synthetic?.is_synthetic ? 'Synthetic AI' : 'Physical Sensor'}
-                      </strong>
-                    </div>
-                  </div>
-
-                  {detectionResult.authenticity.threat_reasons?.length > 0 && (
-                    <div style={{ fontSize: '0.72rem', color: '#F87171', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                      {detectionResult.authenticity.threat_reasons.map((reason, idx) => (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span>⚠️</span> <span>{reason}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {onNavigateToAuthenticity && (
-                    <button 
-                      className="btn-secondary" 
-                      onClick={onNavigateToAuthenticity}
-                      style={{ width: '100%', marginTop: '8px', fontSize: '0.74rem', padding: '6px 10px', justifyContent: 'center', gap: '6px', borderColor: 'rgba(0, 230, 180, 0.3)', color: '#00E6B4' }}
-                    >
-                      <ShieldCheck size={14} /> Open Full Forensic Authenticity Inspection (ELA & Spectrum)
-                    </button>
-                  )}
-
-                  {detectionResult.report_id && onNavigateToReports && (
-                    <button 
-                      className="btn-primary" 
-                      onClick={onNavigateToReports}
-                      style={{ width: '100%', marginTop: '8px', fontSize: '0.78rem', padding: '8px 12px', justifyContent: 'center', gap: '6px', background: 'linear-gradient(135deg, #0284C7 0%, #00E6B4 100%)' }}
-                    >
-                      <ClipboardList size={15} /> Track Report #{detectionResult.report_id} Lifecycle Timeline
-                    </button>
-                  )}
-                </div>
+              {/* TRACKING ACTION CTA */}
+              {detectionResult.report_id && onNavigateToReports && (
+                <button 
+                  className="btn-primary" 
+                  onClick={onNavigateToReports}
+                  style={{ width: '100%', marginTop: '12px', fontSize: '0.82rem', padding: '10px 14px', justifyContent: 'center', gap: '8px', background: 'linear-gradient(135deg, #0284C7 0%, #00E6B4 100%)' }}
+                >
+                  <ClipboardList size={16} /> Track Report #{detectionResult.report_id} Lifecycle Timeline
+                </button>
               )}
             </div>
           ) : (
