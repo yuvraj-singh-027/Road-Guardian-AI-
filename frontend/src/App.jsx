@@ -126,14 +126,7 @@ export default function App() {
     }
   }, [isAuthenticated, activeTab]);
 
-  // Enforce correct default tabs based on userRole
-  useEffect(() => {
-    if (userRole === 'admin' && activeTab === 'detection') {
-      setActiveTab('digital-twin');
-    } else if (userRole === 'public' && activeTab !== 'detection' && activeTab !== 'authenticity' && activeTab !== 'my-reports') {
-      setActiveTab('detection');
-    }
-  }, [userRole, activeTab]);
+
 
   const handleSelectRole = (role) => {
     setUserRole(role);

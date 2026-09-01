@@ -12,13 +12,7 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
     { id: 'municipal-report', label: 'Audit PDF Generator', icon: FileText, publicAccess: false, badge: 'Export' },
   ];
 
-  const navItems = allNavItems.filter(item => {
-    if (userRole === 'public') {
-      return item.id === 'detection' || item.id === 'authenticity' || item.id === 'my-reports';
-    } else {
-      return item.id !== 'detection';
-    }
-  });
+  const navItems = allNavItems;
 
   return (
     <aside className="sidebar">
