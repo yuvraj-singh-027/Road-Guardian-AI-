@@ -372,6 +372,15 @@ export default function MyReportsView({ userRole, onNavigateToDetection }) {
                       </div>
                     </div>
                   </div>
+
+                  {userRole === 'admin' && (
+                    <div style={{ marginTop: '8px', padding: '6px 8px', background: 'rgba(56, 189, 248, 0.08)', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.2)', fontSize: '0.72rem', color: '#38BDF8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <User size={12} /> Citizen: <b style={{ color: '#fff' }}>{report.user_name || 'Public Citizen'}</b>
+                      </span>
+                      <span style={{ color: '#a1a1aa', fontSize: '0.68rem' }}>{report.user_email || ''}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Card Action Button */}

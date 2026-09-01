@@ -3,23 +3,29 @@ import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, RefreshCw, Lock, Use
 
 export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPortal }) {
   const allNavItems = [
-    { id: 'detection', label: 'AI Hazard Perception', icon: Camera, publicAccess: true, badge: 'AI Vision' },
-    { id: 'my-reports', label: 'My Reports & Tracking', icon: ClipboardList, publicAccess: true, badge: 'Lifecycle' },
+    { 
+      id: 'my-reports', 
+      label: userRole === 'admin' ? 'Citizen Reports Registry' : 'My Reports & Tracking', 
+      icon: ClipboardList, 
+      publicAccess: true, 
+      badge: userRole === 'admin' ? 'Triage' : 'Lifecycle' 
+    },
     { id: 'public-feed', label: 'Incident History Feed', icon: History, publicAccess: true, badge: 'Live Feed' },
-    { id: 'authenticity', label: 'Authenticity Verifier', icon: ShieldCheck, publicAccess: true, badge: 'Forensics' },
     { id: 'digital-twin', label: 'Digital Twin City Map', icon: Map, publicAccess: true, badge: 'Spatial' },
     { id: 'traffic-reroute', label: 'Traffic Simulator', icon: Cpu, publicAccess: false, badge: 'Layer 4' },
     { id: 'risk-calculator', label: 'Risk Engine Evaluator', icon: ShieldAlert, publicAccess: false, badge: 'Layer 2' },
     { id: 'municipal-report', label: 'Audit PDF Generator', icon: FileText, publicAccess: false, badge: 'Export' },
+    { id: 'authenticity', label: 'Authenticity Verifier', icon: ShieldCheck, publicAccess: true, badge: 'Forensics' },
+    { id: 'detection', label: 'AI Hazard Perception', icon: Camera, publicAccess: true, badge: 'AI Vision' },
   ];
 
   const navItems = allNavItems.filter(item => {
     if (userRole === 'public') {
-      // Available exclusively on Citizen Public Portal
-      return item.id === 'detection' || item.id === 'my-reports' || item.id === 'authenticity' || item.id === 'digital-twin';
+      // Citizen Public Portal
+      return item.id === 'detection' || item.id === 'my-reports' || item.id === 'public-feed' || item.id === 'digital-twin';
     } else {
-      // Authority Admin Portal: strictly excludes citizen personal tracking
-      return item.id !== 'my-reports' && item.id !== 'detection';
+      // Authority Admin Portal: includes Citizen Reports Registry, Telemetry, and All Operations
+      return item.id !== 'detection';
     }
   });
 
