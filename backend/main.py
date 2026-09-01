@@ -1220,9 +1220,13 @@ def clear_db_compat(req: ClearDBRequest, current_user: dict = Depends(require_ad
         return {"success": True, "message": msg}
     raise HTTPException(status_code=500, detail=msg)
 
-# Mount static HTML frontend if present
+# Mount built React frontend (frontend/dist) or fallback static HTML
+frontend_dist_path = BASE_DIR.parent / "frontend" / "dist"
 static_path = BASE_DIR / "static"
-if static_path.exists():
+if frontend_dist_path.exists():
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=str(frontend_dist_path), html=True), name="frontend_dist")
+elif static_path.exists():
     from fastapi.staticfiles import StaticFiles
     app.mount("/", StaticFiles(directory=str(static_path), html=True), name="static")
 
