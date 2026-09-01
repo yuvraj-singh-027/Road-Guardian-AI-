@@ -30,6 +30,10 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
   const [manualLon, setManualLon] = useState('');
   const [isFetchingGps, setIsFetchingGps] = useState(false);
   const [showLocationFields, setShowLocationFields] = useState(true);
+  const [gpsAccuracy, setGpsAccuracy] = useState(null);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchTimeoutRef = useRef(null);
   
   // Historical public hazard reports feed
   const [recentReports, setRecentReports] = useState([]);
@@ -80,7 +84,7 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
         const res = await fetch(`/api/location/reverse-geocode?lat=${lat}&lon=${lon}`);
         if (res.ok) {
           const data = await res.json();
-          if (data.address && !data.address.startsWith("Road Segment (")) {
+          if (data.address && !data.address.startsWith("Road Segment (") && data.address.includes(',')) {
             return data.address;
           }
         }
@@ -126,6 +130,42 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
     return `Road Segment (${decimalToDMS(lat, true)}, ${decimalToDMS(lon, false)})`;
   };
 
+  const handleAddressSearch = (text) => {
+    setLandmarkName(text);
+    if (!text || text.length < 3) {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}&addressdetails=1&limit=5&countrycodes=in`
+        );
+        if (res.ok) {
+          const results = await res.json();
+          setAddressSuggestions(results);
+          setShowSuggestions(results.length > 0);
+        }
+      } catch (e) {
+        console.warn('Street autocomplete search failed:', e);
+      }
+    }, 300);
+  };
+
+  const handleSelectSuggestion = (item) => {
+    const lat = parseFloat(item.lat);
+    const lon = parseFloat(item.lon);
+    setManualLat(lat.toFixed(6));
+    setManualLon(lon.toFixed(6));
+    setGpsAccuracy(5); // High confidence on chosen street
+    setLandmarkName(item.display_name);
+    setExifWarning(false);
+    setShowSuggestions(false);
+  };
+
   const handleGetCurrentLocation = () => {
     if (!navigator.geolocation) {
       alert('Geolocation is not supported by your browser.');
@@ -136,8 +176,10 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
       async (position) => {
         const lat = position.coords.latitude;
         const lon = position.coords.longitude;
+        const acc = Math.round(position.coords.accuracy || 10);
         setManualLat(lat.toFixed(6));
         setManualLon(lon.toFixed(6));
+        setGpsAccuracy(acc);
         setExifWarning(false);
 
         const addr = await resolvePreciseAddress(lat, lon);
@@ -149,6 +191,7 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
         alert('Could not fetch device GPS. Defaulting to New Delhi coordinates.');
         setManualLat('28.613900');
         setManualLon('77.209000');
+        setGpsAccuracy(10);
         setLandmarkName('Kartavya Path, Raisina Hill, New Delhi, Delhi, PIN: 110004');
         setIsFetchingGps(false);
       },
@@ -508,7 +551,7 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
               )}
 
               {/* Manual Location / Landmark Input Box */}
-              <div style={{ marginTop: '14px', padding: '12px', background: '#18181b', borderRadius: '10px', border: '1px solid var(--border-muted)' }}>
+              <div style={{ marginTop: '14px', padding: '12px', background: '#18181b', borderRadius: '10px', border: '1px solid var(--border-muted)', position: 'relative' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '0.78rem', color: '#00E6B4', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <MapPin size={14} /> Hazard Street Address & Location
@@ -519,27 +562,85 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
                     disabled={isFetchingGps}
                     className="btn-secondary"
                     style={{ padding: '4px 10px', fontSize: '0.72rem', gap: '5px' }}
-                    title="Auto-detect actual street address from device GPS"
+                    title="Auto-detect high-accuracy GPS and street address"
                   >
                     {isFetchingGps ? <RefreshCw className="spin" size={12} /> : <Locate size={12} color="#00E6B4" />}
-                    <span>{isFetchingGps ? 'Resolving Address...' : 'Use My GPS'}</span>
+                    <span>{isFetchingGps ? 'Locking GPS...' : 'Use My GPS'}</span>
                   </button>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Actual Street Address (e.g. Kartavya Path, Raisina Hill, New Delhi)"
-                    value={landmarkName}
-                    onChange={(e) => setLandmarkName(e.target.value)}
-                    style={{ padding: '8px 12px', fontSize: '0.82rem' }}
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Type street name or landmark (e.g. Kartavya Path, CP Block B, MG Road)"
+                      value={landmarkName}
+                      onChange={(e) => handleAddressSearch(e.target.value)}
+                      onFocus={() => addressSuggestions.length > 0 && setShowSuggestions(true)}
+                      style={{ padding: '8px 12px', fontSize: '0.82rem', width: '100%' }}
+                    />
+
+                    {/* Address Autocomplete Suggestions Dropdown */}
+                    {showSuggestions && addressSuggestions.length > 0 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        zIndex: 20,
+                        background: '#09090b',
+                        border: '1px solid var(--primary)',
+                        borderRadius: '8px',
+                        marginTop: '4px',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.8)',
+                        maxHeight: '180px',
+                        overflowY: 'auto'
+                      }}>
+                        {addressSuggestions.map((item, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => handleSelectSuggestion(item)}
+                            style={{
+                              padding: '8px 12px',
+                              borderBottom: '1px solid #18181b',
+                              cursor: 'pointer',
+                              fontSize: '0.76rem',
+                              color: '#e4e4e7',
+                              transition: 'background 0.1s'
+                            }}
+                            className="suggestion-item-hover"
+                          >
+                            <div style={{ fontWeight: 600, color: '#00E6B4' }}>
+                              📍 {item.display_name.split(',')[0]}
+                            </div>
+                            <div style={{ fontSize: '0.68rem', color: '#71717a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {item.display_name}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   {manualLat && manualLon && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: '#71717a', background: '#121214', padding: '6px 12px', borderRadius: '6px', border: '1px solid #27272a' }}>
                       <span style={{ color: '#00E6B4', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                        <span>✓ GPS Verified: {parseFloat(manualLat).toFixed(6)}°, {parseFloat(manualLon).toFixed(6)}°</span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>✓ GPS: {parseFloat(manualLat).toFixed(6)}°, {parseFloat(manualLon).toFixed(6)}°</span>
+                          {gpsAccuracy !== null && (
+                            <span style={{ 
+                              fontSize: '0.66rem', 
+                              padding: '1px 6px', 
+                              borderRadius: '10px', 
+                              background: gpsAccuracy <= 50 ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', 
+                              color: gpsAccuracy <= 50 ? '#10B981' : '#F59E0B',
+                              border: `1px solid ${gpsAccuracy <= 50 ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}`
+                            }}>
+                              🎯 ±{gpsAccuracy}m {gpsAccuracy <= 50 ? 'Physical Fix' : 'Network'}
+                            </span>
+                          )}
+                        </span>
                         <span style={{ fontSize: '0.66rem', color: '#a1a1aa' }}>
                           DMS: {decimalToDMS(parseFloat(manualLat), true)} , {decimalToDMS(parseFloat(manualLon), false)}
                         </span>
@@ -560,7 +661,7 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
                         type="number"
                         step="any"
                         className="form-input"
-                        placeholder="Latitude (e.g. 28.6139)"
+                        placeholder="Latitude (e.g. 28.613900)"
                         value={manualLat}
                         onChange={(e) => setManualLat(e.target.value)}
                         style={{ padding: '6px 10px', fontSize: '0.78rem', color: '#a1a1aa' }}
@@ -569,7 +670,7 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
                         type="number"
                         step="any"
                         className="form-input"
-                        placeholder="Longitude (e.g. 77.2090)"
+                        placeholder="Longitude (e.g. 77.209000)"
                         value={manualLon}
                         onChange={(e) => setManualLon(e.target.value)}
                         style={{ padding: '6px 10px', fontSize: '0.78rem', color: '#a1a1aa' }}
