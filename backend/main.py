@@ -10,9 +10,9 @@ from typing import Dict, Any, List, Optional, Tuple
 from PIL import Image, ExifTags
 import numpy as np
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, JSONResponse
+from fastapi.responses import Response, JSONResponse, FileResponse
 from pydantic import BaseModel, Field
 
 # Ensure current directory is in python path for base configuration
@@ -28,9 +28,10 @@ try:
     from .authenticity_engine import analyze_photo_authenticity
     from .db_manager import (
         clear_all_detections, get_db_status, get_all_detections,
-        get_historical_phashes, log_authenticity_audit, get_authenticity_history
+        get_historical_phashes, log_authenticity_audit, get_authenticity_history,
+        insert_detection, get_user_reports, get_report_by_id_with_history, update_report_status
     )
-    from .auth import router as auth_router, get_current_user
+    from .auth import router as auth_router, get_current_user, require_admin
 except ImportError as e:
     try:
         from risk_engine import calculate_road_risk
@@ -39,9 +40,10 @@ except ImportError as e:
         from authenticity_engine import analyze_photo_authenticity
         from db_manager import (
             clear_all_detections, get_db_status, get_all_detections,
-            get_historical_phashes, log_authenticity_audit, get_authenticity_history
+            get_historical_phashes, log_authenticity_audit, get_authenticity_history,
+            insert_detection, get_user_reports, get_report_by_id_with_history, update_report_status
         )
-        from auth import router as auth_router, get_current_user
+        from auth import router as auth_router, get_current_user, require_admin
     except Exception:
         raise RuntimeError(f"Failed to import core engines: {e}")
 
@@ -803,7 +805,7 @@ async def detect_image(
             current_phash = authenticity_info.get("checks_summary", {}).get("phash", {}).get("current_phash", "") if authenticity_info else ""
             auth_score_val = authenticity_info.get("authenticity_score") if authenticity_info else None
 
-            success, msg = insert_detection(
+            success, msg, logged_report_id = insert_detection(
                 image_name=out_filename,
                 latitude=str(lat),
                 longitude=str(lon),
@@ -812,7 +814,11 @@ async def detect_image(
                 time_val=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 user_id=current_user["id"],
                 phash=current_phash,
-                authenticity_score=auth_score_val
+                authenticity_score=auth_score_val,
+                landmark_name=resolved_landmark,
+                description="Road damage incident identified via AI vision perception and authenticity verification.",
+                damage_type="Pothole",
+                status="AI_VERIFIED"
             )
             print(f"[DB AUTO-INSERT LOG]: {msg}")
 
@@ -861,6 +867,9 @@ async def detect_image(
         "is_fake": is_fake,
         "rejection_reason": rejection_reason,
         "annotated_image_b64": f"data:image/jpeg;base64,{b64_str}",
+        "report_id": f"RG-{1000 + logged_report_id}" if logged_report_id else "RG-PENDING",
+        "db_id": logged_report_id,
+        "status": "AI_VERIFIED",
         "message": final_result_message
     }
 
@@ -1086,6 +1095,117 @@ def get_gallery_images(current_user: dict = Depends(get_current_user)):
         return {"images": []}
     files = [f.name for f in folder_path.iterdir() if f.is_file() and f.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]]
     return {"images": sorted(files, reverse=True)}
+
+
+# ================== USER-SPECIFIC REPORT TRACKING & LIFECYCLE API ==================
+
+@app.get("/api/reports/my-reports")
+def get_my_reports_endpoint(
+    status: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Secure endpoint returning road hazard reports belonging exclusively to the authenticated user.
+    Administrators receive all platform reports for authority oversight.
+    """
+    is_admin = current_user.get("role") == "admin"
+    reports = get_user_reports(
+        user_id=current_user["id"],
+        is_admin=is_admin,
+        status_filter=status
+    )
+    return {
+        "success": True,
+        "total": len(reports),
+        "user": {
+            "id": current_user["id"],
+            "name": current_user["name"],
+            "role": current_user["role"]
+        },
+        "reports": reports
+    }
+
+
+@app.get("/api/reports/{report_id}")
+def get_report_detail_endpoint(
+    report_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Retrieves full details and complete chronological lifecycle timeline for a specific report.
+    Enforces strict user isolation (returns 403 Forbidden if not report owner and not admin).
+    """
+    is_admin = current_user.get("role") == "admin"
+    report_data, err = get_report_by_id_with_history(
+        report_id=report_id,
+        current_user_id=current_user["id"],
+        is_admin=is_admin
+    )
+    if err == "not_found":
+        raise HTTPException(status_code=404, detail=f"Road hazard report #RG-{1000 + report_id} not found.")
+    if err == "unauthorized":
+        raise HTTPException(status_code=403, detail="Access denied. You can only view reports submitted by your own account.")
+
+    return {
+        "success": True,
+        "report": report_data
+    }
+
+
+class ReportStatusUpdateRequest(BaseModel):
+    status: str
+    message: Optional[str] = None
+    status_label: Optional[str] = None
+
+
+@app.post("/api/reports/{report_id}/status")
+def update_report_status_endpoint(
+    report_id: int,
+    req: ReportStatusUpdateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Allows authorized administrators and municipal authorities to update report lifecycle stages
+    and automatically log an entry into the report's status history.
+    """
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Only municipal authorities and administrators can update report status lifecycles.")
+
+    success, msg = update_report_status(
+        report_id=report_id,
+        new_status=req.status,
+        message=req.message,
+        changed_by=current_user.get("name") or "Municipal Authority",
+        status_label=req.status_label
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=msg)
+
+    # Return refreshed report with updated timeline
+    updated_report, _ = get_report_by_id_with_history(
+        report_id=report_id,
+        current_user_id=current_user["id"],
+        is_admin=True
+    )
+    return {
+        "success": True,
+        "message": msg,
+        "report": updated_report
+    }
+
+
+@app.get("/api/images/{filename}")
+@app.get("/potholes/{filename}")
+def serve_hazard_image(filename: str):
+    """
+    Serves stored road damage photographs securely.
+    """
+    potholes_dir = BASE_DIR / "potholes"
+    file_path = potholes_dir / filename
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(file_path)
+    raise HTTPException(status_code=404, detail="Requested image file was not found on server.")
+
 
 class ClearDBRequest(BaseModel):
     passcode: str

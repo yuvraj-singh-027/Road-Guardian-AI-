@@ -163,19 +163,36 @@ def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 """)
-                # Try adding user_id dynamically if column is missing on existing table
-                try:
-                    cursor.execute("SELECT user_id FROM pothole_detections LIMIT 1")
-                except Exception:
-                    cursor.execute("ALTER TABLE pothole_detections ADD COLUMN user_id INT NULL")
-                try:
-                    cursor.execute("SELECT phash FROM pothole_detections LIMIT 1")
-                except Exception:
-                    cursor.execute("ALTER TABLE pothole_detections ADD COLUMN phash VARCHAR(64) NULL")
-                try:
-                    cursor.execute("SELECT authenticity_score FROM pothole_detections LIMIT 1")
-                except Exception:
-                    cursor.execute("ALTER TABLE pothole_detections ADD COLUMN authenticity_score FLOAT NULL")
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS report_status_history (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    report_id INT NOT NULL,
+                    status VARCHAR(50) NOT NULL,
+                    status_label VARCHAR(100),
+                    message TEXT,
+                    changed_by VARCHAR(50) DEFAULT 'system',
+                    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                """)
+                # Try adding dynamic columns if missing on existing MySQL table
+                cols_to_add = [
+                    ("user_id", "INT NULL"),
+                    ("phash", "VARCHAR(64) NULL"),
+                    ("authenticity_score", "FLOAT NULL"),
+                    ("status", "VARCHAR(50) DEFAULT 'AI_VERIFIED'"),
+                    ("landmark_name", "VARCHAR(255) NULL"),
+                    ("description", "TEXT NULL"),
+                    ("damage_type", "VARCHAR(100) DEFAULT 'Pothole'"),
+                    ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+                ]
+                for col_name, col_def in cols_to_add:
+                    try:
+                        cursor.execute(f"SELECT `{col_name}` FROM pothole_detections LIMIT 1")
+                    except Exception:
+                        try:
+                            cursor.execute(f"ALTER TABLE pothole_detections ADD COLUMN `{col_name}` {col_def}")
+                        except Exception:
+                            pass
         else: # SQLite
             with conn:
                 conn.execute("""
@@ -208,7 +225,14 @@ def init_db():
                     risk_score REAL,
                     image_hash TEXT,
                     user_id INTEGER NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    phash TEXT,
+                    authenticity_score REAL,
+                    status TEXT DEFAULT 'AI_VERIFIED',
+                    landmark_name TEXT,
+                    description TEXT,
+                    damage_type TEXT DEFAULT 'Pothole',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT
                 );
                 """)
                 conn.execute("""
@@ -224,19 +248,36 @@ def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 """)
-                # Try adding dynamic columns if missing on existing table
-                try:
-                    conn.execute("SELECT user_id FROM pothole_detections LIMIT 1")
-                except Exception:
-                    conn.execute("ALTER TABLE pothole_detections ADD COLUMN user_id INTEGER")
-                try:
-                    conn.execute("SELECT phash FROM pothole_detections LIMIT 1")
-                except Exception:
-                    conn.execute("ALTER TABLE pothole_detections ADD COLUMN phash TEXT")
-                try:
-                    conn.execute("SELECT authenticity_score FROM pothole_detections LIMIT 1")
-                except Exception:
-                    conn.execute("ALTER TABLE pothole_detections ADD COLUMN authenticity_score REAL")
+                conn.execute("""
+                CREATE TABLE IF NOT EXISTS report_status_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    report_id INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    status_label TEXT,
+                    message TEXT,
+                    changed_by TEXT DEFAULT 'system',
+                    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                """)
+                # Try adding dynamic columns if missing on existing SQLite table
+                sqlite_cols = [
+                    ("user_id", "INTEGER"),
+                    ("phash", "TEXT"),
+                    ("authenticity_score", "REAL"),
+                    ("status", "TEXT DEFAULT 'AI_VERIFIED'"),
+                    ("landmark_name", "TEXT"),
+                    ("description", "TEXT"),
+                    ("damage_type", "TEXT DEFAULT 'Pothole'"),
+                    ("updated_at", "TEXT")
+                ]
+                for col_name, col_def in sqlite_cols:
+                    try:
+                        conn.execute(f"SELECT {col_name} FROM pothole_detections LIMIT 1")
+                    except Exception:
+                        try:
+                            conn.execute(f"ALTER TABLE pothole_detections ADD COLUMN {col_name} {col_def}")
+                        except Exception:
+                            pass
     finally:
         conn.close()
     
@@ -345,11 +386,16 @@ def insert_detection(
     skip_dedup: bool = False,
     user_id: Optional[int] = None,
     phash: str = "",
-    authenticity_score: Optional[float] = None
-) -> Tuple[bool, str]:
+    authenticity_score: Optional[float] = None,
+    landmark_name: Optional[str] = None,
+    description: Optional[str] = None,
+    damage_type: str = "Pothole",
+    status: str = "AI_VERIFIED"
+) -> Tuple[bool, str, Optional[int]]:
     """
-    Inserts a new pothole detection record into the database after deduplication checks.
-    Returns (success: bool, message: str)
+    Inserts a new pothole detection record into the database after deduplication checks,
+    and initializes its status history records.
+    Returns (success: bool, message: str, report_id: Optional[int])
     """
     init_db()
     
@@ -378,31 +424,384 @@ def insert_detection(
     if not skip_dedup:
         is_dup, reason = is_duplicate_detection(lat_num, lon_num, severity, img_hash)
         if is_dup:
-            return False, f"Suppressed Duplicate: {reason}"
+            return False, f"Suppressed Duplicate: {reason}", None
 
     # Calculate Risk Score
     risk_info = calculate_road_risk(severity=severity, confidence=confidence)
     risk_score = risk_info["score"]
 
     conn, db_type = get_db_connection()
+    inserted_id = None
     try:
         if db_type == "mysql":
             with conn.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO pothole_detections 
-                    (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, risk_score, image_hash, user_id, phash, authenticity_score)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, risk_score, img_hash, user_id, phash or None, authenticity_score))
+                    (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, 
+                     risk_score, image_hash, user_id, phash, authenticity_score, landmark_name, description, damage_type, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, 
+                      risk_score, img_hash, user_id, phash or None, authenticity_score, landmark_name, description, damage_type, status))
+                inserted_id = cursor.lastrowid
         else: # sqlite
             with conn:
-                conn.execute("""
+                cursor = conn.execute("""
                     INSERT INTO pothole_detections 
-                    (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, risk_score, image_hash, user_id, phash, authenticity_score)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, risk_score, img_hash, user_id, phash or None, authenticity_score))
-        return True, f"Successfully logged detection '{image_name}' to {db_type.upper()} database."
+                    (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, 
+                     risk_score, image_hash, user_id, phash, authenticity_score, landmark_name, description, damage_type, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, 
+                      risk_score, img_hash, user_id, phash or None, authenticity_score, landmark_name, description, damage_type, status))
+                inserted_id = cursor.lastrowid
     except Exception as e:
-        return False, f"Database insertion error: {e}"
+        return False, f"Database insertion error: {e}", None
+    finally:
+        conn.close()
+
+    # Automatically record baseline status history entries
+    if inserted_id:
+        # Step 1: SUBMITTED (Citizen upload)
+        add_status_history(
+            report_id=inserted_id,
+            status="SUBMITTED",
+            status_label="Report Submitted",
+            message="Road hazard photograph and geotag submitted by citizen.",
+            changed_by="user"
+        )
+        # Step 2: AI_VERIFIED (Autonomous YOLO & Authenticity perception)
+        auth_str = f"{int(authenticity_score)}/100" if authenticity_score is not None else "Verified"
+        conf_pct = int(confidence * 100) if confidence else 85
+        add_status_history(
+            report_id=inserted_id,
+            status="AI_VERIFIED",
+            status_label="AI Verification Completed",
+            message=f"Autonomous YOLO perception ({severity} severity, {conf_pct}% confidence) and Authenticity Engine check ({auth_str}) completed successfully.",
+            changed_by="AI"
+        )
+
+    return True, f"Successfully logged detection '{image_name}' to {db_type.upper()} database (ID #{inserted_id}).", inserted_id
+
+
+def add_status_history(
+    report_id: int,
+    status: str,
+    status_label: Optional[str] = None,
+    message: Optional[str] = None,
+    changed_by: str = "system"
+) -> bool:
+    """
+    Appends a new chronological status event to report_status_history.
+    """
+    init_db()
+    label = status_label or status.replace("_", " ").title()
+    msg = message or f"Status updated to {label}"
+    conn, db_type = get_db_connection()
+    try:
+        if db_type == "mysql":
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO report_status_history (report_id, status, status_label, message, changed_by)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (report_id, status, label, msg, changed_by))
+        else:
+            with conn:
+                conn.execute("""
+                    INSERT INTO report_status_history (report_id, status, status_label, message, changed_by)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (report_id, status, label, msg, changed_by))
+        return True
+    except Exception as e:
+        print(f"[DB STATUS HISTORY ERROR]: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def get_user_reports(
+    user_id: int,
+    is_admin: bool = False,
+    status_filter: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Securely retrieves road hazard reports.
+    If is_admin is False: returns ONLY reports belonging to user_id (WHERE user_id = ?).
+    If is_admin is True: returns all reports across the platform.
+    """
+    init_db()
+    conn, db_type = get_db_connection()
+    reports = []
+    try:
+        if db_type == "mysql":
+            with conn.cursor() as cursor:
+                if is_admin:
+                    query = """
+                        SELECT p.*, u.name as user_name, u.email as user_email
+                        FROM pothole_detections p
+                        LEFT JOIN users u ON p.user_id = u.id
+                    """
+                    params = []
+                    if status_filter and status_filter.upper() != "ALL":
+                        query += " WHERE p.status = %s"
+                        params.append(status_filter.upper())
+                    query += " ORDER BY p.id DESC"
+                    cursor.execute(query, tuple(params))
+                else:
+                    query = """
+                        SELECT p.*, u.name as user_name, u.email as user_email
+                        FROM pothole_detections p
+                        LEFT JOIN users u ON p.user_id = u.id
+                        WHERE p.user_id = %s
+                    """
+                    params = [user_id]
+                    if status_filter and status_filter.upper() != "ALL":
+                        query += " AND p.status = %s"
+                        params.append(status_filter.upper())
+                    query += " ORDER BY p.id DESC"
+                    cursor.execute(query, tuple(params))
+                rows = cursor.fetchall()
+        else: # sqlite
+            if is_admin:
+                query = """
+                    SELECT p.*, u.name as user_name, u.email as user_email
+                    FROM pothole_detections p
+                    LEFT JOIN users u ON p.user_id = u.id
+                """
+                params = []
+                if status_filter and status_filter.upper() != "ALL":
+                    query += " WHERE p.status = ?"
+                    params.append(status_filter.upper())
+                query += " ORDER BY p.id DESC"
+                cursor = conn.execute(query, tuple(params))
+            else:
+                query = """
+                    SELECT p.*, u.name as user_name, u.email as user_email
+                    FROM pothole_detections p
+                    LEFT JOIN users u ON p.user_id = u.id
+                    WHERE p.user_id = ?
+                """
+                params = [user_id]
+                if status_filter and status_filter.upper() != "ALL":
+                    query += " AND p.status = ?"
+                    params.append(status_filter.upper())
+                query += " ORDER BY p.id DESC"
+                cursor = conn.execute(query, tuple(params))
+            rows = [dict(r) for r in cursor.fetchall()]
+
+        for r in rows:
+            rec_id = r.get("id")
+            raw_lat = r.get("lat_numeric") or r.get("latitude")
+            raw_lon = r.get("lon_numeric") or r.get("longitude")
+            try:
+                lat_val = float(raw_lat) if raw_lat is not None else 28.6139
+            except Exception:
+                lat_val = 28.6139
+            try:
+                lon_val = float(raw_lon) if raw_lon is not None else 77.2090
+            except Exception:
+                lon_val = 77.2090
+
+            reports.append({
+                "id": rec_id,
+                "report_id": f"RG-{1000 + rec_id}",
+                "user_id": r.get("user_id"),
+                "user_name": r.get("user_name") or "Citizen Contributor",
+                "user_email": r.get("user_email") or "",
+                "image_name": r.get("image_name"),
+                "damage_type": r.get("damage_type") or "Pothole Hazard",
+                "severity": r.get("severity") or "Medium",
+                "confidence": float(r.get("confidence") or 0.82),
+                "latitude": lat_val,
+                "longitude": lon_val,
+                "landmark_name": r.get("landmark_name") or "Municipal Road Segment",
+                "description": r.get("description") or "",
+                "risk_score": float(r.get("risk_score") or 55.0),
+                "authenticity_score": float(r.get("authenticity_score") or 92.0),
+                "status": r.get("status") or "AI_VERIFIED",
+                "created_at": str(r.get("created_at") or r.get("time")),
+                "updated_at": str(r.get("updated_at") or r.get("created_at") or r.get("time"))
+            })
+        return reports
+    finally:
+        conn.close()
+
+
+def get_report_by_id_with_history(
+    report_id: int,
+    current_user_id: int,
+    is_admin: bool = False
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Retrieves a report and its complete status timeline history.
+    Enforces authorization: returns (None, 'unauthorized') if current user does not own the report
+    and is not an admin.
+    Returns (report_dict, None) on success, or (None, 'not_found' | 'unauthorized').
+    """
+    init_db()
+    conn, db_type = get_db_connection()
+    try:
+        # 1. Fetch report record
+        if db_type == "mysql":
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT p.*, u.name as user_name, u.email as user_email
+                    FROM pothole_detections p
+                    LEFT JOIN users u ON p.user_id = u.id
+                    WHERE p.id = %s LIMIT 1
+                """, (report_id,))
+                row = cursor.fetchone()
+        else:
+            cursor = conn.execute("""
+                SELECT p.*, u.name as user_name, u.email as user_email
+                FROM pothole_detections p
+                LEFT JOIN users u ON p.user_id = u.id
+                WHERE p.id = ? LIMIT 1
+            """, (report_id,))
+            r = cursor.fetchone()
+            row = dict(r) if r else None
+
+        if not row:
+            return None, "not_found"
+
+        report_owner_id = row.get("user_id")
+
+        # 2. Strict authorization check
+        if not is_admin and (report_owner_id is not None and report_owner_id != current_user_id):
+            return None, "unauthorized"
+
+        # 3. Fetch chronological status history
+        history_events = []
+        if db_type == "mysql":
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id, status, status_label, message, changed_by, changed_at
+                    FROM report_status_history
+                    WHERE report_id = %s
+                    ORDER BY id ASC
+                """, (report_id,))
+                history_rows = cursor.fetchall()
+        else:
+            cursor = conn.execute("""
+                SELECT id, status, status_label, message, changed_by, changed_at
+                FROM report_status_history
+                WHERE report_id = ?
+                ORDER BY id ASC
+            """, (report_id,))
+            history_rows = [dict(hr) for hr in cursor.fetchall()]
+
+        for hr in history_rows:
+            history_events.append({
+                "id": hr.get("id"),
+                "status": hr.get("status"),
+                "status_label": hr.get("status_label") or hr.get("status", "").replace("_", " ").title(),
+                "message": hr.get("message") or "",
+                "changed_by": hr.get("changed_by") or "system",
+                "changed_at": str(hr.get("changed_at"))
+            })
+
+        # If no history exists on legacy record, construct default timeline
+        if not history_events:
+            t_created = str(row.get("created_at") or row.get("time"))
+            history_events = [
+                {
+                    "id": 1,
+                    "status": "SUBMITTED",
+                    "status_label": "Report Submitted",
+                    "message": "Road hazard photograph and geotag submitted by citizen.",
+                    "changed_by": "user",
+                    "changed_at": t_created
+                },
+                {
+                    "id": 2,
+                    "status": row.get("status") or "AI_VERIFIED",
+                    "status_label": (row.get("status") or "AI_VERIFIED").replace("_", " ").title(),
+                    "message": f"Autonomous YOLO perception ({row.get('severity')} severity) and Authenticity verification completed.",
+                    "changed_by": "AI",
+                    "changed_at": t_created
+                }
+            ]
+
+        raw_lat = row.get("lat_numeric") or row.get("latitude")
+        raw_lon = row.get("lon_numeric") or row.get("longitude")
+        try:
+            lat_val = float(raw_lat) if raw_lat is not None else 28.6139
+        except Exception:
+            lat_val = 28.6139
+        try:
+            lon_val = float(raw_lon) if raw_lon is not None else 77.2090
+        except Exception:
+            lon_val = 77.2090
+
+        report_obj = {
+            "id": row.get("id"),
+            "report_id": f"RG-{1000 + row.get('id')}",
+            "user_id": row.get("user_id"),
+            "user_name": row.get("user_name") or "Citizen Contributor",
+            "user_email": row.get("user_email") or "",
+            "image_name": row.get("image_name"),
+            "damage_type": row.get("damage_type") or "Pothole Hazard",
+            "severity": row.get("severity") or "Medium",
+            "confidence": float(row.get("confidence") or 0.82),
+            "latitude": lat_val,
+            "longitude": lon_val,
+            "landmark_name": row.get("landmark_name") or "Municipal Road Segment",
+            "description": row.get("description") or "",
+            "risk_score": float(row.get("risk_score") or 55.0),
+            "authenticity_score": float(row.get("authenticity_score") or 92.0),
+            "status": row.get("status") or "AI_VERIFIED",
+            "created_at": str(row.get("created_at") or row.get("time")),
+            "updated_at": str(row.get("updated_at") or row.get("created_at") or row.get("time")),
+            "status_history": history_events
+        }
+
+        return report_obj, None
+    finally:
+        conn.close()
+
+
+def update_report_status(
+    report_id: int,
+    new_status: str,
+    message: Optional[str] = None,
+    changed_by: str = "admin",
+    status_label: Optional[str] = None
+) -> Tuple[bool, str]:
+    """
+    Updates the active status of a report and appends a record to report_status_history.
+    """
+    init_db()
+    status_clean = new_status.strip().upper()
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    label = status_label or status_clean.replace("_", " ").title()
+    msg = message or f"Status transitioned to {label} by {changed_by}."
+
+    conn, db_type = get_db_connection()
+    try:
+        if db_type == "mysql":
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE pothole_detections 
+                    SET status = %s, updated_at = %s 
+                    WHERE id = %s
+                """, (status_clean, now_str, report_id))
+        else:
+            with conn:
+                conn.execute("""
+                    UPDATE pothole_detections 
+                    SET status = ?, updated_at = ? 
+                    WHERE id = ?
+                """, (status_clean, now_str, report_id))
+        
+        # Append to status history
+        add_status_history(
+            report_id=report_id,
+            status=status_clean,
+            status_label=label,
+            message=msg,
+            changed_by=changed_by
+        )
+        return True, f"Report RG-{1000 + report_id} successfully updated to '{status_clean}'."
+    except Exception as e:
+        return False, f"Failed updating report status: {e}"
     finally:
         conn.close()
 

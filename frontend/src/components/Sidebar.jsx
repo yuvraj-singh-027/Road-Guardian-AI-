@@ -1,9 +1,10 @@
 import React from 'react';
-import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, RefreshCw, Lock, Users, User, ChevronRight, Layers, ShieldCheck } from 'lucide-react';
+import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, RefreshCw, Lock, Users, User, ChevronRight, Layers, ShieldCheck, ClipboardList } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPortal }) {
   const allNavItems = [
     { id: 'detection', label: 'AI Hazard Perception', icon: Camera, publicAccess: true, badge: 'AI Vision' },
+    { id: 'my-reports', label: 'My Reports & Tracking', icon: ClipboardList, publicAccess: true, badge: 'Lifecycle' },
     { id: 'authenticity', label: 'Authenticity Verifier', icon: ShieldCheck, publicAccess: true, badge: 'Forensics' },
     { id: 'digital-twin', label: 'Digital Twin City Map', icon: Map, publicAccess: true, badge: 'Spatial' },
     { id: 'traffic-reroute', label: 'Traffic Simulator', icon: Cpu, publicAccess: false, badge: 'Layer 4' },
@@ -13,7 +14,7 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
 
   const navItems = allNavItems.filter(item => {
     if (userRole === 'public') {
-      return item.id === 'detection' || item.id === 'authenticity';
+      return item.id === 'detection' || item.id === 'authenticity' || item.id === 'my-reports';
     } else {
       return item.id !== 'detection';
     }

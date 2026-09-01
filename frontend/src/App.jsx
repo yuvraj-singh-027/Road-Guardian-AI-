@@ -8,6 +8,7 @@ import TrafficRerouteView from './components/TrafficRerouteView';
 import RiskCalculatorView from './components/RiskCalculatorView';
 import ReportGeneratorView from './components/ReportGeneratorView';
 import AuthenticityVerifierView from './components/AuthenticityVerifierView';
+import MyReportsView from './components/MyReportsView';
 import UserProfileModal from './components/UserProfileModal';
 import AuthPortal from './components/AuthPortal';
 import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, Lock, KeyRound, ArrowUpRight, Loader } from 'lucide-react';
@@ -129,7 +130,7 @@ export default function App() {
   useEffect(() => {
     if (userRole === 'admin' && activeTab === 'detection') {
       setActiveTab('digital-twin');
-    } else if (userRole === 'public' && activeTab !== 'detection' && activeTab !== 'authenticity') {
+    } else if (userRole === 'public' && activeTab !== 'detection' && activeTab !== 'authenticity' && activeTab !== 'my-reports') {
       setActiveTab('detection');
     }
   }, [userRole, activeTab]);
@@ -160,6 +161,11 @@ export default function App() {
         return {
           title: 'AI Hazard Perception & Computer Vision',
           subtitle: 'Real-time pothole and road damage detection with EXIF GPS geotagging mapping'
+        };
+      case 'my-reports':
+        return {
+          title: userRole === 'admin' ? 'Authority Road Hazard Complaint Registry' : 'My Road Hazard Reports & Tracking',
+          subtitle: 'Track real-time lifecycle stages, municipal assignment, repair progress, and AI reverification for submitted reports'
         };
       case 'authenticity':
         return {
@@ -330,8 +336,24 @@ export default function App() {
         </div>
 
         {/* Dynamic View Component */}
-        {activeTab === 'detection' && <AIDetectionView userRole={userRole} onNavigateToAuthenticity={() => setActiveTab('authenticity')} />}
-        {activeTab === 'authenticity' && <AuthenticityVerifierView onNavigateToDetection={(file) => setActiveTab('detection')} />}
+        {activeTab === 'detection' && (
+          <AIDetectionView 
+            userRole={userRole} 
+            onNavigateToAuthenticity={() => setActiveTab('authenticity')}
+            onNavigateToReports={() => setActiveTab('my-reports')}
+          />
+        )}
+        {activeTab === 'my-reports' && (
+          <MyReportsView 
+            userRole={userRole} 
+            onNavigateToDetection={() => setActiveTab('detection')} 
+          />
+        )}
+        {activeTab === 'authenticity' && (
+          <AuthenticityVerifierView 
+            onNavigateToDetection={(file) => setActiveTab('detection')} 
+          />
+        )}
         {activeTab === 'digital-twin' && <DigitalTwinMapView />}
         {activeTab === 'traffic-reroute' && (userRole === 'admin' ? <TrafficRerouteView /> : renderRestrictedAccessNotice())}
         {activeTab === 'risk-calculator' && (userRole === 'admin' ? <RiskCalculatorView /> : renderRestrictedAccessNotice())}

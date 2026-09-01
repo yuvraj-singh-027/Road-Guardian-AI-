@@ -366,6 +366,13 @@ async def get_current_user(request: Request) -> dict:
     return user
 
 
+async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
+    """Dependency that enforces administrative or authority privileges."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Authority or administrator access required.")
+    return current_user
+
+
 # --- Auth Routes Implementation ---
 
 @router.post("/signup")

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Camera, AlertTriangle, ShieldCheck, MapPin, RefreshCw, Clock, History, FileText, Sparkles, PieChart as PieIcon, BarChart2, Locate, Compass, Lock } from 'lucide-react';
+import { Upload, Camera, AlertTriangle, ShieldCheck, MapPin, RefreshCw, Clock, History, FileText, Sparkles, PieChart as PieIcon, BarChart2, Locate, Compass, Lock, ClipboardList } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 
 const decimalToDMS = (deg, isLat) => {
@@ -13,7 +13,7 @@ const decimalToDMS = (deg, isLat) => {
   return `${degrees}°${minutes}'${seconds}" ${direction}`;
 };
 
-export default function AIDetectionView({ userRole = 'public', onNavigateToAuthenticity }) {
+export default function AIDetectionView({ userRole = 'public', onNavigateToAuthenticity, onNavigateToReports }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -680,6 +680,16 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
                       style={{ width: '100%', marginTop: '8px', fontSize: '0.74rem', padding: '6px 10px', justifyContent: 'center', gap: '6px', borderColor: 'rgba(0, 230, 180, 0.3)', color: '#00E6B4' }}
                     >
                       <ShieldCheck size={14} /> Open Full Forensic Authenticity Inspection (ELA & Spectrum)
+                    </button>
+                  )}
+
+                  {detectionResult.report_id && onNavigateToReports && (
+                    <button 
+                      className="btn-primary" 
+                      onClick={onNavigateToReports}
+                      style={{ width: '100%', marginTop: '8px', fontSize: '0.78rem', padding: '8px 12px', justifyContent: 'center', gap: '6px', background: 'linear-gradient(135deg, #0284C7 0%, #00E6B4 100%)' }}
+                    >
+                      <ClipboardList size={15} /> Track Report #{detectionResult.report_id} Lifecycle Timeline
                     </button>
                   )}
                 </div>
