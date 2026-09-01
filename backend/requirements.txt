@@ -10,6 +10,7 @@ geocoder
 reportlab
 fpdf2
 pymysql
+psycopg2-binary
 requests
 pyjwt
 email-validator

@@ -26,12 +26,19 @@ from datetime import datetime, timedelta
 import pandas as pd
 from typing import Dict, List, Tuple, Any, Optional
 
-# Try importing PyMySQL for MySQL database connections
+# Try importing PyMySQL for MySQL and psycopg2 for PostgreSQL/Supabase
 try:
     import pymysql
     MYSQL_AVAILABLE = True
 except ImportError:
     MYSQL_AVAILABLE = False
+
+try:
+    import psycopg2
+    import psycopg2.extras
+    POSTGRES_AVAILABLE = True
+except ImportError:
+    POSTGRES_AVAILABLE = False
 
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(BACKEND_DIR) # Root directory
@@ -46,10 +53,27 @@ except ImportError:
 
 def get_db_connection():
     """
-    Attempts to connect to MySQL using environment variables.
-    If MySQL configuration is missing or connection fails, falls back gracefully to local SQLite.
-    Returns (connection_obj, db_type: 'mysql'|'sqlite')
+    Attempts to connect to:
+    1. Supabase / PostgreSQL (SUPABASE_DB_URL, DATABASE_URL, POSTGRES_URL)
+    2. MySQL (MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD)
+    3. Local SQLite fallback (road_guardian.db)
+    Returns (connection_obj, db_type: 'postgres'|'mysql'|'sqlite')
     """
+    # 1. Supabase / PostgreSQL cloud connection
+    supabase_url = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
+    if POSTGRES_AVAILABLE and supabase_url:
+        try:
+            conn = psycopg2.connect(
+                supabase_url,
+                cursor_factory=psycopg2.extras.RealDictCursor,
+                sslmode=os.getenv("PGSSLMODE", "require")
+            )
+            conn.autocommit = True
+            return conn, "postgres"
+        except Exception as pg_err:
+            print(f"[Supabase / PostgreSQL Connection Warning]: {pg_err}")
+
+    # 2. MySQL database connection
     mysql_host = os.getenv("MYSQL_HOST")
     mysql_user = os.getenv("MYSQL_USER")
     mysql_pass = os.getenv("MYSQL_PASSWORD", "")
@@ -58,7 +82,6 @@ def get_db_connection():
 
     if MYSQL_AVAILABLE and mysql_host and mysql_user:
         try:
-            # First attempt connecting directly to database
             conn = pymysql.connect(
                 host=mysql_host,
                 user=mysql_user,
@@ -70,7 +93,6 @@ def get_db_connection():
             )
             return conn, "mysql"
         except pymysql.err.OperationalError:
-            # Try creating database if it doesn't exist
             try:
                 temp_conn = pymysql.connect(
                     host=mysql_host,
@@ -98,7 +120,7 @@ def get_db_connection():
         except Exception:
             pass
 
-    # Fallback to local SQLite database
+    # 3. Fallback to local SQLite database
     conn = sqlite3.connect(SQLITE_DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn, "sqlite"
@@ -115,7 +137,73 @@ def init_db():
 
     conn, db_type = get_db_connection()
     try:
-        if db_type == "mysql":
+        if db_type == "postgres":
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    email VARCHAR(255) UNIQUE NOT NULL,
+                    password_hash VARCHAR(255),
+                    is_verified INT DEFAULT 0,
+                    verification_token VARCHAR(255),
+                    reset_token VARCHAR(255),
+                    reset_token_expires TIMESTAMPTZ,
+                    google_id VARCHAR(255) UNIQUE,
+                    profile_picture VARCHAR(500),
+                    role VARCHAR(50) DEFAULT 'public',
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                );
+                """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pothole_detections (
+                    id SERIAL PRIMARY KEY,
+                    image_name VARCHAR(255) NOT NULL,
+                    latitude VARCHAR(50),
+                    longitude VARCHAR(50),
+                    severity VARCHAR(50),
+                    confidence FLOAT,
+                    time TIMESTAMPTZ,
+                    lat_numeric DOUBLE PRECISION,
+                    lon_numeric DOUBLE PRECISION,
+                    risk_score DOUBLE PRECISION,
+                    image_hash VARCHAR(64),
+                    user_id INT NULL,
+                    status VARCHAR(50) DEFAULT 'AI_VERIFIED',
+                    landmark_name VARCHAR(255) NULL,
+                    description TEXT NULL,
+                    damage_type VARCHAR(100) DEFAULT 'Pothole',
+                    phash VARCHAR(64) NULL,
+                    authenticity_score FLOAT NULL,
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                );
+                """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS authenticity_audits (
+                    id SERIAL PRIMARY KEY,
+                    image_name VARCHAR(255) NOT NULL,
+                    phash VARCHAR(64),
+                    authenticity_score FLOAT,
+                    status VARCHAR(50),
+                    status_code VARCHAR(50),
+                    bullet_summary TEXT,
+                    report_json TEXT,
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                );
+                """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS report_status_history (
+                    id SERIAL PRIMARY KEY,
+                    report_id INT NOT NULL,
+                    status VARCHAR(50) NOT NULL,
+                    status_label VARCHAR(100),
+                    message TEXT,
+                    changed_by VARCHAR(50) DEFAULT 'system',
+                    changed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                );
+                """)
+        elif db_type == "mysql":
             with conn.cursor() as cursor:
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
