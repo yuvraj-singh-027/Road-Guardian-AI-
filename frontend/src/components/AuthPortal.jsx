@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Mail, Lock, User, ArrowRight, ShieldCheck, AlertCircle, Loader, KeyRound, CheckCircle2, ChevronLeft, Zap } from 'lucide-react';
+import { Activity, Mail, Lock, User, ArrowRight, ShieldCheck, AlertCircle, Loader, KeyRound, CheckCircle2, ChevronLeft, Zap, Smartphone, Github } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 
 export default function AuthPortal({ onAuthSuccess, initialAction, initialToken }) {
@@ -20,6 +20,13 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
   // Verification & Reset states
   const [token, setToken] = useState('');
   const [showSandbox, setShowSandbox] = useState(false);
+
+  // Phone SMS OTP & GitHub States
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [mockOtpCode, setMockOtpCode] = useState('');
+  const [showGithubSandbox, setShowGithubSandbox] = useState(false);
 
   useEffect(() => {
     if (initialAction) {
@@ -44,6 +51,9 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
     setName('');
     setAdminPasscode('');
     setShowAdminField(false);
+    setPhone('');
+    setOtp('');
+    setOtpSent(false);
   };
 
   // 1. Email Verification Trigger
@@ -338,6 +348,116 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
     }
   };
 
+  // 8. Phone SMS OTP Handlers
+  const handleSendOtp = async (e) => {
+    e.preventDefault();
+    if (!phone.trim()) {
+      setErrorMsg('Please enter a valid phone number.');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    try {
+      const res = await fetch('/api/auth/phone/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phone.trim() })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setOtpSent(true);
+        setMockOtpCode(data.mock_otp || '402288');
+        setSuccessMsg(`OTP sent to ${phone.trim()}. Demo Verification PIN: ${data.mock_otp || '402288'}`);
+      } else {
+        setErrorMsg(data.detail || 'Failed to send OTP.');
+      }
+    } catch (err) {
+      setErrorMsg('Network error sending OTP.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    if (!otp.trim()) {
+      setErrorMsg('Please enter the 6-digit OTP code.');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    try {
+      const res = await fetch('/api/auth/phone/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phone.trim(), otp: otp.trim() })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        localStorage.setItem('road_guardian_token', data.token);
+        sessionStorage.setItem('road_guardian_role', data.user.role);
+        onAuthSuccess(data.user);
+      } else {
+        setErrorMsg(data.detail || 'Invalid OTP code.');
+      }
+    } catch (err) {
+      setErrorMsg('Network error verifying OTP.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 9. GitHub OAuth Trigger & Sandbox Handler
+  const triggerGithubLogin = async () => {
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'github',
+          options: { redirectTo: window.location.origin }
+        });
+        if (error) throw error;
+        return;
+      }
+      setShowGithubSandbox(true);
+    } catch (err) {
+      setShowGithubSandbox(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGithubSandboxLogin = async (mockProfile) => {
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      const res = await fetch('/api/auth/github/mock-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mockProfile)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        localStorage.setItem('road_guardian_token', data.token);
+        sessionStorage.setItem('road_guardian_role', data.user.role);
+        onAuthSuccess(data.user);
+      } else {
+        setErrorMsg('GitHub login failed.');
+      }
+    } catch (err) {
+      setErrorMsg('Network error in GitHub login.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="portal-overlay">
       <div className="portal-container" style={{ maxWidth: '460px' }}>
@@ -498,34 +618,124 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
 
               <div style={{ margin: '16px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
                 <span style={{ height: '1px', background: '#27272a', flex: 1 }}></span>
-                <span style={{ fontSize: '0.72rem', color: '#71717a', textTransform: 'uppercase' }}>or</span>
+                <span style={{ fontSize: '0.72rem', color: '#71717a', textTransform: 'uppercase' }}>or sign in with</span>
                 <span style={{ height: '1px', background: '#27272a', flex: 1 }}></span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={triggerGoogleLogin}
+                  style={{ justifyContent: 'center', padding: '10px', gap: '8px', fontSize: '0.82rem' }}
+                  disabled={loading}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                  </svg>
+                  Google
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={triggerGithubLogin}
+                  style={{ justifyContent: 'center', padding: '10px', gap: '8px', fontSize: '0.82rem' }}
+                  disabled={loading}
+                >
+                  <Github size={16} color="#e4e4e7" />
+                  GitHub
+                </button>
               </div>
 
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={triggerGoogleLogin}
-                style={{ width: '100%', justifyContent: 'center', padding: '11px', gap: '10px' }}
+                onClick={() => switchView('phone-otp')}
+                style={{ width: '100%', justifyContent: 'center', padding: '10px', gap: '8px', fontSize: '0.82rem', borderColor: 'rgba(0,230,180,0.3)' }}
                 disabled={loading}
               >
-                {/* SVG Google icon */}
-                <svg width="18" height="18" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-                </svg>
-                Continue with Google
+                <Smartphone size={16} color="#00E6B4" />
+                Sign In with Phone Number (SMS OTP)
               </button>
 
-              <div style={{ marginTop: '24px', fontSize: '0.82rem', color: '#a1a1aa', textAlign: 'center' }}>
+              <div style={{ marginTop: '20px', fontSize: '0.82rem', color: '#a1a1aa', textAlign: 'center' }}>
                 Don't have an account?{' '}
                 <span onClick={() => switchView('signup')} style={{ color: '#00E6B4', cursor: 'pointer', fontWeight: 600 }}>
                   Sign Up
                 </span>
               </div>
             </form>
+          )}
+
+          {/* VIEW: PHONE SMS OTP */}
+          {view === 'phone-otp' && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: '#00E6B4', fontSize: '0.88rem', fontWeight: 600 }}>
+                <Smartphone size={18} /> Phone SMS OTP Verification
+              </div>
+
+              {!otpSent ? (
+                <form onSubmit={handleSendOtp}>
+                  <div style={{ marginBottom: '16px', textAlign: 'left' }}>
+                    <label className="form-label">Phone Number</label>
+                    <div style={{ position: 'relative' }}>
+                      <Smartphone size={16} color="#71717a" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                      <input
+                        type="tel"
+                        placeholder="+91 9876543210"
+                        className="form-input"
+                        style={{ paddingLeft: '38px' }}
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        required
+                        disabled={loading}
+                      />
+                    </div>
+                  </div>
+
+                  <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '12px' }} disabled={loading}>
+                    {loading ? <Loader size={18} className="animate-spin" /> : 'Send 6-Digit OTP Code'}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyOtp}>
+                  <div style={{ marginBottom: '16px', textAlign: 'left' }}>
+                    <label className="form-label">Enter 6-Digit OTP Code</label>
+                    <div style={{ position: 'relative' }}>
+                      <KeyRound size={16} color="#71717a" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                      <input
+                        type="text"
+                        placeholder="402288"
+                        maxLength={6}
+                        className="form-input"
+                        style={{ paddingLeft: '38px', letterSpacing: '4px', fontSize: '1.1rem', fontWeight: 700 }}
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value)}
+                        required
+                        disabled={loading}
+                      />
+                    </div>
+                  </div>
+
+                  <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '12px' }} disabled={loading}>
+                    {loading ? <Loader size={18} className="animate-spin" /> : 'Verify & Sign In'}
+                  </button>
+                </form>
+              )}
+
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => switchView('login')}
+                style={{ width: '100%', marginTop: '16px', justifyContent: 'center', gap: '6px' }}
+              >
+                <ChevronLeft size={16} /> Back to Email Login
+              </button>
+            </div>
           )}
 
           {/* VIEW: SIGNUP */}
