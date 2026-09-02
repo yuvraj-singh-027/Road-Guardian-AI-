@@ -63,8 +63,13 @@ export default function App() {
       return;
     }
 
+    // Abort controller to prevent initial load freeze (max 3 sec timeout)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
     try {
-      const res = await fetch('/api/auth/me');
+      const res = await fetch('/api/auth/me', { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const userData = await res.json();
         setUser(userData);
@@ -84,8 +89,9 @@ export default function App() {
         setUserRole(null);
       }
     } catch (err) {
-      console.error('Auth verification error:', err);
-      // Fallback offline support
+      clearTimeout(timeoutId);
+      console.warn('Auth verification timeout or error:', err);
+      // Fallback offline support if token exists locally
       setIsAuthenticated(true);
       const savedRole = sessionStorage.getItem('road_guardian_role') || 'public';
       setUserRole(savedRole);
@@ -221,10 +227,15 @@ export default function App() {
   if (isAuthLoading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '16px', background: '#09090b' }}>
-        <Loader size={40} className="animate-spin" color="#00E6B4" />
-        <p style={{ color: '#a1a1aa', fontFamily: 'Space Grotesk, sans-serif', fontSize: '0.9rem', letterSpacing: '0.5px' }}>
-          Verifying Encrypted Session...
-        </p>
+        <Loader size={36} className="animate-spin" color="#00E6B4" />
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ color: '#f4f4f5', fontFamily: 'Space Grotesk, sans-serif', fontSize: '0.95rem', fontWeight: 600, letterSpacing: '0.5px' }}>
+            Initializing Road Guardian AI...
+          </p>
+          <p style={{ color: '#71717a', fontSize: '0.78rem', marginTop: '4px' }}>
+            Authenticating security credentials
+          </p>
+        </div>
       </div>
     );
   }

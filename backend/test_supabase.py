@@ -20,6 +20,9 @@ for _env_candidate in [Path(__file__).resolve().parent / ".env", Path(__file__).
 from db_manager import get_db_connection, init_db, get_db_status
 
 def main():
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+
     print("\n=======================================================")
     print("      ROAD GUARDIAN AI — DATABASE CONNECTION TEST")
     print("=======================================================")

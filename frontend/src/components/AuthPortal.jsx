@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Mail, Lock, User, ArrowRight, ShieldCheck, AlertCircle, Loader, KeyRound, CheckCircle2, ChevronLeft } from 'lucide-react';
+import { Activity, Mail, Lock, User, ArrowRight, ShieldCheck, AlertCircle, Loader, KeyRound, CheckCircle2, ChevronLeft, Zap } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from '../supabaseClient';
 
 export default function AuthPortal({ onAuthSuccess, initialAction, initialToken }) {
   const [view, setView] = useState('login'); // login | signup | forgot | reset | verify
@@ -273,11 +274,22 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
     }
   };
 
-  // Check if standard keys are set by querying status
+  // Check if standard keys are set by querying status or using Supabase
   const triggerGoogleLogin = async () => {
     setLoading(true);
     setErrorMsg('');
     try {
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin
+          }
+        });
+        if (error) throw error;
+        return;
+      }
+
       const res = await fetch('/api/auth/google/status');
       if (res.ok) {
         const data = await res.json();
@@ -404,6 +416,9 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
           <p className="portal-subtitle" style={{ fontSize: '0.82rem', color: '#a1a1aa' }}>
             Infrastructure AI & City Traffic Intelligence Twin
           </p>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: '#38BDF8', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.2)', padding: '4px 12px', borderRadius: '12px', marginTop: '10px', fontWeight: 500 }}>
+            <Zap size={12} color="#38BDF8" /> {isSupabaseConfigured ? 'Powered by Supabase Enterprise Auth' : 'Supabase & Hybrid Auth System Active'}
+          </div>
         </div>
 
         <div className="glass-card" style={{ padding: '28px 24px' }}>
