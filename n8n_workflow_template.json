@@ -1,0 +1,105 @@
+{
+  "name": "Road Guardian AI - PWD Emergency Notification & Work Order Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "road-guardian-ai",
+        "options": {}
+      },
+      "name": "Road Guardian Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "road-guardian-ai"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.event }}",
+              "value2": "HAZARD_DETECTED"
+            }
+          ]
+        }
+      },
+      "name": "Check Event Type",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.payload.severity }}",
+              "value2": "Critical"
+            },
+            {
+              "value1": "={{ $json.body.payload.severity }}",
+              "value2": "High"
+            }
+          ]
+        },
+        "combineOperation": "any"
+      },
+      "name": "High or Critical Severity?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "telegram_alert_text",
+              "value": "=🚨 *CRITICAL ROAD HAZARD DETECTED*\n\n📌 *Report ID:* {{ $json.body.payload.report_id }}\n📍 *Location:* {{ $json.body.payload.landmark_name }}\n⚠️ *Severity:* {{ $json.body.payload.severity }}\n📊 *Risk Score:* {{ $json.body.payload.risk_score }}/100\n🕳️ *Potholes Found:* {{ $json.body.payload.pothole_count }}\n🗺️ *GPS Coordinates:* {{ $json.body.payload.gps.latitude }}, {{ $json.body.payload.gps.longitude }}\n\n🔗 *Open Map:* https://maps.google.com/?q={{ $json.body.payload.gps.latitude }},{{ $json.body.payload.gps.longitude }}"
+            }
+          ]
+        }
+      },
+      "name": "Format Alert Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [900, 150]
+    }
+  ],
+  "connections": {
+    "Road Guardian Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check Event Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Event Type": {
+      "main": [
+        [
+          {
+            "node": "High or Critical Severity?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "High or Critical Severity?": {
+      "main": [
+        [
+          {
+            "node": "Format Alert Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

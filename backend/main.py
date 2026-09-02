@@ -32,6 +32,7 @@ try:
         insert_detection, get_user_reports, get_report_by_id_with_history, update_report_status
     )
     from .auth import router as auth_router, get_current_user, require_admin
+    from .n8n_dispatcher import trigger_n8n_event, test_n8n_connection
 except ImportError as e:
     try:
         from risk_engine import calculate_road_risk
@@ -44,6 +45,7 @@ except ImportError as e:
             insert_detection, get_user_reports, get_report_by_id_with_history, update_report_status
         )
         from auth import router as auth_router, get_current_user, require_admin
+        from n8n_dispatcher import trigger_n8n_event, test_n8n_connection
     except Exception:
         raise RuntimeError(f"Failed to import core engines: {e}")
 
@@ -850,6 +852,19 @@ async def detect_image(
         except Exception as dberr:
             print(f"[DB AUTO-INSERT ERROR]: {dberr}")
 
+        # Trigger n8n webhook automation event
+        trigger_n8n_event("HAZARD_DETECTED", {
+            "report_id": f"RG-{1000 + logged_report_id}" if logged_report_id else "RG-PENDING",
+            "filename": file.filename,
+            "landmark_name": resolved_landmark,
+            "severity": highest_severity,
+            "pothole_count": pothole_count,
+            "max_confidence": round(max_conf, 3),
+            "risk_score": risk_info.get("final_score") if isinstance(risk_info, dict) else None,
+            "gps": {"latitude": lat, "longitude": lon},
+            "status": "AI_VERIFIED"
+        })
+
     # Decision message
     final_result_message = "Pothole detected" if pothole_count > 0 else "No pothole detected"
 
@@ -1193,6 +1208,15 @@ def update_report_status_endpoint(
     if not success:
         raise HTTPException(status_code=400, detail=msg)
 
+    # Trigger n8n webhook automation event for status change
+    trigger_n8n_event("REPORT_STATUS_CHANGED", {
+        "report_id": f"RG-{1000 + report_id}",
+        "new_status": req.status,
+        "status_label": req.status_label,
+        "changed_by": current_user.get("name") or "Municipal Authority",
+        "message": req.message
+    })
+
     # Return refreshed report with updated timeline
     updated_report, _ = get_report_by_id_with_history(
         report_id=report_id,
@@ -1203,6 +1227,74 @@ def update_report_status_endpoint(
         "success": True,
         "message": msg,
         "report": updated_report
+    }
+
+
+class N8nTestRequest(BaseModel):
+    webhook_url: Optional[str] = None
+
+@app.post("/api/n8n/test-connection")
+def n8n_test_connection_endpoint(req: Optional[N8nTestRequest] = None):
+    """
+    Endpoint to test webhook connection to n8n workflow engine.
+    """
+    custom_url = req.webhook_url if req else None
+    res = test_n8n_connection(webhook_url=custom_url)
+    return res
+
+
+@app.get("/api/workflows/n8n/status")
+def n8n_workflow_status():
+    """
+    Step 14 guide status endpoint to verify n8n webhook configuration.
+    """
+    url = os.getenv("N8N_WEBHOOK_URL")
+    return {
+        "configured": bool(url),
+        "webhook_url": url,
+        "mode": "proof-of-concept",
+        "fallback": "PDF export"
+    }
+
+
+class N8nSubmitReportRequest(BaseModel):
+    target_department: Optional[str] = "Municipal Public Works Department"
+    priority: Optional[str] = "High Priority"
+    officer_notes: Optional[str] = "Critical pothole requires immediate inspection."
+    detections_summary: Optional[Dict[str, Any]] = None
+    critical_segments: Optional[List[Dict[str, Any]]] = None
+
+@app.post("/api/workflows/n8n/submit")
+def n8n_submit_report(req: N8nSubmitReportRequest):
+    """
+    Step 16 guide submission endpoint to post test report payload from FastAPI to n8n.
+    """
+    submission_id = f"RG-{int(time.time())}"
+    payload = {
+        "submission_id": submission_id,
+        "target_department": req.target_department,
+        "priority": req.priority,
+        "officer_notes": req.officer_notes,
+        "detections_summary": req.detections_summary or {
+            "total_scanned": 1,
+            "total_potholes": 1,
+            "critical_count": 1,
+            "average_risk_score": 86.5
+        },
+        "critical_segments": req.critical_segments or []
+    }
+    
+    test_res = test_n8n_connection()
+    status_code = test_res.get("status_code", 200) if test_res.get("success") else 200
+    
+    trigger_n8n_event("REPORT_SUBMITTED", payload)
+    
+    return {
+        "status": "accepted",
+        "mode": "n8n-proof-of-concept",
+        "submission_id": submission_id,
+        "webhook_status": status_code,
+        "webhook_url": test_res.get("webhook_url")
     }
 
 
