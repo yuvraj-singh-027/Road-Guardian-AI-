@@ -1241,20 +1241,21 @@ def get_db_status() -> Dict[str, Any]:
     conn, db_type = get_db_connection()
     try:
         count = 0
-        if db_type == "mysql":
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT COUNT(*) as cnt FROM pothole_detections")
-                row = cursor.fetchone()
-                count = row["cnt"] if row else 0
+        if db_type in ["mysql", "postgres"]:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) as cnt FROM pothole_detections")
+            row = cursor.fetchone()
+            count = row["cnt"] if (row and "cnt" in row) else (list(row.values())[0] if row else 0)
         else:
             cursor = conn.execute("SELECT COUNT(*) as cnt FROM pothole_detections")
             row = cursor.fetchone()
             count = row["cnt"] if row else 0
 
+        target_host = "Supabase PostgreSQL Cloud" if db_type == "postgres" else (os.getenv("MYSQL_HOST", "Local Database") if db_type == "mysql" else "Local SQLite File")
         return {
             "type": db_type.upper(),
             "status": "Connected (Online)",
-            "host": os.getenv("MYSQL_HOST", "Local SQLite") if db_type == "mysql" else "Local SQLite File",
+            "host": target_host,
             "count": count
         }
     except Exception as e:
