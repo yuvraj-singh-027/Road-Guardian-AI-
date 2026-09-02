@@ -49,6 +49,7 @@ export default function App() {
   const [showProfileModal, setShowProfileModal] = useState(false);
 
   const [userRole, setUserRole] = useState(null); // null triggers PortalSelectionModal
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState('detection');
   const [summaryStats, setSummaryStats] = useState(null);
@@ -339,6 +340,8 @@ export default function App() {
         setActiveTab={setActiveTab} 
         userRole={userRole}
         onSwitchPortal={handleSwitchPortal}
+        isMobileOpen={isMobileOpen}
+        setIsMobileOpen={setIsMobileOpen}
       />
       
       <div className="main-content">
@@ -349,6 +352,8 @@ export default function App() {
           userRole={userRole}
           user={user}
           onSwitchPortal={handleSwitchPortal}
+          isMobileOpen={isMobileOpen}
+          setIsMobileOpen={setIsMobileOpen}
         />
 
         {/* Global Summary Metric Banner — shadcn Stat Cards */}

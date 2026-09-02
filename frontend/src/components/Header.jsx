@@ -1,30 +1,43 @@
 import React from 'react';
-import { Wifi, CloudRain, ShieldAlert, Users, Bell, User } from 'lucide-react';
+import { Wifi, CloudRain, ShieldAlert, Users, Bell, User, Menu } from 'lucide-react';
 
-export default function Header({ title, subtitle, summaryStats, userRole, user, onSwitchPortal }) {
+export default function Header({ title, subtitle, summaryStats, userRole, user, onSwitchPortal, isMobileOpen, setIsMobileOpen }) {
   return (
     <header className="top-header">
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-          <h1 className="page-title">{title}</h1>
-          <div className={`role-pill ${userRole === 'admin' ? 'role-pill-admin' : 'role-pill-public'}`}>
-            {userRole === 'admin' ? <ShieldAlert size={13} /> : <Users size={13} />}
-            <span>{userRole === 'admin' ? 'Authority Admin' : 'Public Citizen'}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* Mobile Hamburger Button */}
+        {setIsMobileOpen && (
+          <button 
+            className="mobile-menu-toggle"
+            onClick={() => setIsMobileOpen(!isMobileOpen)}
+            aria-label="Toggle mobile menu"
+          >
+            <Menu size={22} color="#00E6B4" />
+          </button>
+        )}
+
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px', flexWrap: 'wrap' }}>
+            <h1 className="page-title">{title}</h1>
+            <div className={`role-pill ${userRole === 'admin' ? 'role-pill-admin' : 'role-pill-public'}`}>
+              {userRole === 'admin' ? <ShieldAlert size={13} /> : <Users size={13} />}
+              <span>{userRole === 'admin' ? 'Authority Admin' : 'Public Citizen'}</span>
+            </div>
           </div>
+          <p className="page-desc">{subtitle}</p>
         </div>
-        <p className="page-desc">{subtitle}</p>
       </div>
 
       <div className="header-telemetry">
         {userRole === 'admin' && (
           <>
-            <div className="telemetry-chip">
+            <div className="telemetry-chip telemetry-desktop-only">
               <Wifi size={15} color="#10B981" />
-              <span>Server Status:</span>
+              <span>Server:</span>
               <span className="telemetry-val" style={{ color: '#10B981' }}>Connected</span>
             </div>
 
-            <div className="telemetry-chip">
+            <div className="telemetry-chip telemetry-desktop-only">
               <CloudRain size={15} color="#38BDF8" />
               <span>Weather:</span>
               <span className="telemetry-val" style={{ color: '#38BDF8' }}>
