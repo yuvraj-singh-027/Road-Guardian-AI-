@@ -1012,6 +1012,18 @@ async def send_phone_otp(req: PhoneSendOTPRequest):
     generated_otp = f"{secrets.randbelow(900000) + 100000}"
     OTP_CACHE[phone_clean] = generated_otp
 
+    # Ensure proper phone number formatting for India (+91) & Global E.164
+    digits_only = "".join(filter(str.isdigit, phone_clean))
+    if len(digits_only) == 10:
+        phone_e164 = f"+91{digits_only}"
+        phone_10digit = digits_only
+    elif len(digits_only) == 12 and digits_only.startswith("91"):
+        phone_e164 = f"+{digits_only}"
+        phone_10digit = digits_only[2:]
+    else:
+        phone_e164 = f"+{digits_only}" if not phone_clean.startswith("+") else phone_clean
+        phone_10digit = digits_only[-10:] if len(digits_only) >= 10 else digits_only
+
     # Attempt Real SMS Dispatch if Twilio or Fast2SMS keys exist in environment
     twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
     twilio_auth = os.getenv("TWILIO_AUTH_TOKEN")
@@ -1020,13 +1032,14 @@ async def send_phone_otp(req: PhoneSendOTPRequest):
 
     sms_dispatched = False
     sms_provider = "Demo Sandbox Pin (402288)"
+    sms_log = "No SMS provider environment variables set."
 
     if twilio_sid and twilio_auth and twilio_from:
         try:
             import urllib.parse
             twilio_url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json"
             post_data = urllib.parse.urlencode({
-                "To": phone_clean,
+                "To": phone_e164,
                 "From": twilio_from,
                 "Body": f"Your Road Guardian AI Verification Code is: {generated_otp}"
             }).encode("utf-8")
@@ -1037,32 +1050,45 @@ async def send_phone_otp(req: PhoneSendOTPRequest):
                 "Content-Type": "application/x-www-form-urlencoded"
             })
             with urllib.request.urlopen(req_sms, timeout=5) as resp:
+                resp_text = resp.read().decode("utf-8")
                 if resp.status in (200, 201):
                     sms_dispatched = True
                     sms_provider = "Twilio SMS Cloud Gateway"
+                    sms_log = f"Twilio SMS sent to {phone_e164}"
+                else:
+                    sms_log = f"Twilio HTTP {resp.status}: {resp_text[:100]}"
         except Exception as ex:
+            sms_log = f"Twilio Error: {str(ex)}"
             print(f"[TWILIO SMS ERROR]: {ex}")
 
     elif fast2sms_key:
         try:
-            digits_only = "".join(filter(str.isdigit, phone_clean))
-            fast_url = f"https://www.fast2sms.com/dev/bulkV2?authorization={fast2sms_key}&route=otp&variables_values={generated_otp}&numbers={digits_only}"
+            import urllib.parse
+            msg_encoded = urllib.parse.quote(f"Your Road Guardian AI OTP verification code is {generated_otp}")
+            # Try Quick SMS Route first (does not require DLT registration)
+            fast_url = f"https://www.fast2sms.com/dev/bulkV2?authorization={fast2sms_key}&route=q&message={msg_encoded}&flash=0&numbers={phone_10digit}"
             req_fast = urllib.request.Request(fast_url, headers={"User-Agent": "RoadGuardianAI/2.0"})
             with urllib.request.urlopen(req_fast, timeout=5) as resp:
+                raw_resp = resp.read().decode("utf-8")
                 if resp.status == 200:
                     sms_dispatched = True
                     sms_provider = "Fast2SMS Gateway"
+                    sms_log = f"Fast2SMS dispatched to {phone_10digit}"
+                else:
+                    sms_log = f"Fast2SMS HTTP {resp.status}: {raw_resp[:100]}"
         except Exception as ex:
+            sms_log = f"Fast2SMS Error: {str(ex)}"
             print(f"[FAST2SMS ERROR]: {ex}")
 
-    print(f"[PHONE OTP SENT]: Number={phone_clean} | OTP Code={generated_otp} | Provider={sms_provider}")
+    print(f"[PHONE OTP SENT]: Number={phone_clean} | OTP Code={generated_otp} | Provider={sms_provider} | Log={sms_log}")
     return {
         "success": True,
         "message": f"6-Digit Verification OTP sent to {phone_clean}",
         "phone": phone_clean,
         "mock_otp": generated_otp,
         "sms_provider": sms_provider,
-        "sms_dispatched": sms_dispatched
+        "sms_dispatched": sms_dispatched,
+        "sms_log": sms_log
     }
 
 @router.post("/phone/verify-otp")

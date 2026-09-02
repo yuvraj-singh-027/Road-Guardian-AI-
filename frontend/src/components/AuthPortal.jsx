@@ -370,7 +370,11 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
       if (res.ok) {
         setOtpSent(true);
         setMockOtpCode(data.mock_otp || '402288');
-        setSuccessMsg(`OTP sent to ${phone.trim()}. Demo Verification PIN: ${data.mock_otp || '402288'}`);
+        if (data.sms_dispatched) {
+          setSuccessMsg(`Real SMS dispatched via ${data.sms_provider}! Check your phone messages.`);
+        } else {
+          setSuccessMsg(`OTP Code for ${phone.trim()}: ${data.mock_otp || '402288'} (${data.sms_log || 'Demo Mode'})`);
+        }
       } else {
         setErrorMsg(data.detail || 'Failed to send OTP.');
       }
