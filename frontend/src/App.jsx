@@ -10,6 +10,7 @@ import ReportGeneratorView from './components/ReportGeneratorView';
 import AuthenticityVerifierView from './components/AuthenticityVerifierView';
 import MyReportsView from './components/MyReportsView';
 import PublicFeedHistoryView from './components/PublicFeedHistoryView';
+import N8nAutomationView from './components/N8nAutomationView';
 import PublicNavbar from './components/PublicNavbar';
 import UserProfileModal from './components/UserProfileModal';
 import AuthPortal from './components/AuthPortal';
@@ -431,6 +432,7 @@ export default function App() {
           />
         )}
         {activeTab === 'digital-twin' && <DigitalTwinMapView />}
+        {activeTab === 'n8n-automation' && <N8nAutomationView />}
         {activeTab === 'traffic-reroute' && (userRole === 'admin' ? <TrafficRerouteView /> : renderRestrictedAccessNotice())}
         {activeTab === 'risk-calculator' && (userRole === 'admin' ? <RiskCalculatorView /> : renderRestrictedAccessNotice())}
         {activeTab === 'municipal-report' && (userRole === 'admin' ? <ReportGeneratorView /> : renderRestrictedAccessNotice())}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, RefreshCw, Lock, Users, User, ChevronRight, Layers, ShieldCheck, ClipboardList, History } from 'lucide-react';
+import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, RefreshCw, Lock, Users, User, ChevronRight, Layers, ShieldCheck, ClipboardList, History, Zap } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPortal }) {
   const allNavItems = [
@@ -12,6 +12,7 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
     },
     { id: 'public-feed', label: 'Incident History Feed', icon: History, publicAccess: true, badge: 'Live Feed' },
     { id: 'digital-twin', label: 'Digital Twin City Map', icon: Map, publicAccess: true, badge: 'Spatial' },
+    { id: 'n8n-automation', label: 'n8n Automation Hub', icon: Zap, publicAccess: true, badge: 'Workflow' },
     { id: 'traffic-reroute', label: 'Traffic Simulator', icon: Cpu, publicAccess: false, badge: 'Layer 4' },
     { id: 'risk-calculator', label: 'Risk Engine Evaluator', icon: ShieldAlert, publicAccess: false, badge: 'Layer 2' },
     { id: 'municipal-report', label: 'Audit PDF Generator', icon: FileText, publicAccess: false, badge: 'Export' },
@@ -22,7 +23,7 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
   const navItems = allNavItems.filter(item => {
     if (userRole === 'public') {
       // Citizen Public Portal
-      return item.id === 'detection' || item.id === 'my-reports' || item.id === 'public-feed' || item.id === 'digital-twin';
+      return item.id === 'detection' || item.id === 'my-reports' || item.id === 'public-feed' || item.id === 'digital-twin' || item.id === 'n8n-automation';
     } else {
       // Authority Admin Portal: includes Citizen Reports Registry, Telemetry, and All Operations
       return item.id !== 'detection';
