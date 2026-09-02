@@ -22,7 +22,7 @@ if str(BASE_DIR) not in sys.path:
 
 import math
 try:
-    from .risk_engine import calculate_road_risk
+    from .risk_engine import calculate_road_risk, check_vulnerable_zone_proximity
     from .traffic_engine import get_default_city_network, simulate_traffic_rerouting
     from .report_generator import generate_pdf_report
     from .authenticity_engine import analyze_photo_authenticity
@@ -35,7 +35,7 @@ try:
     from .n8n_dispatcher import trigger_n8n_event, test_n8n_connection
 except ImportError as e:
     try:
-        from risk_engine import calculate_road_risk
+        from risk_engine import calculate_road_risk, check_vulnerable_zone_proximity
         from traffic_engine import get_default_city_network, simulate_traffic_rerouting
         from report_generator import generate_pdf_report
         from authenticity_engine import analyze_photo_authenticity
@@ -766,6 +766,9 @@ async def detect_image(
         else:
             highest_severity = "Low"
 
+    # Check GIS Vulnerable Zone Proximity (School / Hospital / Clinic / College)
+    is_vulnerable_zone, zone_desc = check_vulnerable_zone_proximity(lat, lon)
+
     # Calculate multi-factor road risk for this detection
     risk_info = calculate_road_risk(
         severity=highest_severity,
@@ -775,7 +778,7 @@ async def detect_image(
         traffic_density="High",
         road_type="Arterial Road",
         weather="Rainy",
-        proximity_school_hospital=True
+        proximity_school_hospital=is_vulnerable_zone
     )
 
     # Ensure photo authenticity info is attached

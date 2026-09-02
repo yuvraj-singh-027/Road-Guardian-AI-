@@ -1,10 +1,33 @@
-"""
-Layer 2 — Context Engine & Road Risk Scoring
-Calculates multi-factor Road Risk Score (0-100) combining Perception (YOLO Detections)
-with contextual parameters (GPS Speed, Traffic Density, Road Type, Weather, Vulnerable Proximity).
-"""
+import json
+import urllib.request
+from typing import Dict, Any, Tuple, Optional
 
-from typing import Dict, Any, Tuple
+def check_vulnerable_zone_proximity(lat: float, lon: float) -> Tuple[bool, str]:
+    """
+    Queries OpenStreetMap GIS Reverse Geocoding API to detect if GPS coordinates
+    fall within close proximity (~200m) of a School, Hospital, Clinic, or Educational Facility.
+    """
+    if not lat or not lon or lat == 0.0 or lon == 0.0:
+        return False, "Standard Road Segment"
+
+    try:
+        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
+        req = urllib.request.Request(url, headers={'User-Agent': 'RoadGuardianAI/2.0-ProximityCheck'})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            address = data.get("address", {})
+            amenity = str(address.get("amenity", "")).lower()
+            building = str(address.get("building", "")).lower()
+            display_name = str(data.get("display_name", "")).lower()
+
+            keywords = ["school", "hospital", "clinic", "college", "university", "kindergarten", "dispensary", "medical"]
+            for kw in keywords:
+                if kw in amenity or kw in building or kw in display_name:
+                    return True, f"Vulnerable Zone ({kw.capitalize()} Proximity)"
+    except Exception as ex:
+        print(f"[Proximity Check Warning]: {ex}")
+
+    return False, "Standard Road Segment"
 
 def calculate_road_risk(
     severity: str = "Medium",
