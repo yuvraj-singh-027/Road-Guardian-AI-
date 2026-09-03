@@ -3,15 +3,39 @@ import { Cpu, AlertTriangle, ArrowRight, ShieldCheck, RefreshCw, BarChart2, Tren
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Cell } from 'recharts';
 
 export default function TrafficRerouteView() {
-  const [closedRoadId, setClosedRoadId] = useState('Road_A');
+  const [closedRoadId, setClosedRoadId] = useState('Sec1_Blvd_N1');
+  const [roadOptions, setRoadOptions] = useState([]);
   const [simulationResult, setSimulationResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // 1. Fetch available road segments on mount
+  useEffect(() => {
+    fetch('/api/traffic/network')
+      .then(res => res.json())
+      .then(data => {
+        const segs = data.segments || [];
+        if (segs.length > 0) {
+          setRoadOptions(segs);
+          const initialId = segs[0].id;
+          setClosedRoadId(initialId);
+          runSimulation(initialId);
+        }
+      })
+      .catch(err => {
+        console.error('Failed loading road network for simulator:', err);
+        runSimulation('Sec1_Blvd_N1');
+      });
+  }, []);
+
   const runSimulation = (roadId) => {
     setIsLoading(true);
+    const token = localStorage.getItem('road_guardian_token');
     fetch('/api/traffic/reroute', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
       body: JSON.stringify({ closed_road_id: roadId, center_lat: 28.6139, center_lon: 77.2090 })
     })
       .then((res) => res.json())
@@ -25,20 +49,12 @@ export default function TrafficRerouteView() {
       });
   };
 
-  useEffect(() => {
-    runSimulation('Road_A');
-  }, []);
-
   // Data for Before vs After Chart
-  const chartData = simulationResult?.updated_network?.map(seg => {
+  const chartData = simulationResult?.updated_network?.slice(0, 8).map(seg => {
     const isClosed = seg.id === closedRoadId;
     return {
-      name: seg.name.replace('Northern Arterial Highway', 'Road A')
-                    .replace('Central Bypass Ring', 'Road B')
-                    .replace('Cross Connector Avenue', 'Road C')
-                    .replace('Southern Expressway', 'Road D')
-                    .replace('Western Outer Ring', 'Road E')
-                    .replace('Eastern Link Road', 'Road F'),
+      name: seg.name.length > 18 ? seg.name.slice(0, 16) + '…' : seg.name,
+      fullName: seg.name,
       original: seg.base_traffic,
       rerouted: isClosed ? 0 : (seg.simulated_traffic || seg.base_traffic),
       capacity: seg.base_capacity
@@ -55,11 +71,11 @@ export default function TrafficRerouteView() {
               <Cpu size={18} color="#00E6B4" /> Maintenance Closure Simulator
             </h3>
             <span style={{ fontSize: '0.72rem', background: '#18181b', color: '#00E6B4', padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(0,230,180,0.2)' }}>
-              Layer 4 Engine
+              Layer 4 Dynamic Engine
             </span>
           </div>
           <p style={{ fontSize: '0.82rem', color: '#a1a1aa', marginBottom: '16px', lineHeight: 1.45 }}>
-            Select a critical road segment to simulate municipal repair closure and predict citywide capacity redistribution.
+            Select any municipal arterial corridor to simulate physical maintenance closure and compute real-time dynamic traffic redistribution.
           </p>
 
           <div className="form-group">
@@ -72,10 +88,20 @@ export default function TrafficRerouteView() {
                 runSimulation(e.target.value);
               }}
             >
-              <option value="Road_A">Road A (Northern Arterial) — Critical (8 Potholes)</option>
-              <option value="Road_B">Road B (Central Bypass) — Medium (3 Potholes)</option>
-              <option value="Road_C">Road C (Cross Connector) — High (5 Potholes)</option>
-              <option value="Road_D">Road D (Southern Expressway) — Low (1 Pothole)</option>
+              {roadOptions.length > 0 ? (
+                roadOptions.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} — {r.severity || 'Normal'} ({r.potholes || 0} Potholes, {r.base_traffic} veh/hr)
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="Sec1_Blvd_N1">Sector 1 North Boulevard — Critical (4 Potholes)</option>
+                  <option value="School_Zone_Ave1">School Zone Avenue 1 — High (2 Potholes)</option>
+                  <option value="Central_Cross_1">Central Cross Arterial — Medium (2 Potholes)</option>
+                  <option value="South_Expressway_1">South Expressway Connector — High (3 Potholes)</option>
+                </>
+              )}
             </select>
           </div>
 

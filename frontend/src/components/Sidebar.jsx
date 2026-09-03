@@ -126,7 +126,7 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
                 <Lock size={14} /> Authority Tools Locked
               </div>
               <div style={{ fontSize: '0.72rem', color: '#a1a1aa', marginTop: '4px', lineHeight: 1.4 }}>
-                Unlock Traffic Simulator, Risk Evaluator & Official Audit PDF reports with Admin Passcode.
+                Sign in with an authorized Municipal Authority account to access digital twin traffic simulation & audit generators.
               </div>
             </div>
           )}

@@ -443,7 +443,7 @@ export default function ReportGeneratorView() {
 
           <div style={{ padding: '12px', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '10px', color: '#38BDF8', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ShieldCheck size={20} />
-            <span>Official digital twin certified output. Complies with Municipal PWD & NHAI digital audit standards.</span>
+            <span>Official digital twin audit document. Engineered for municipal road inspection and forensic work order routing.</span>
           </div>
         </div>
       </div>

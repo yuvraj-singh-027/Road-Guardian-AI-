@@ -156,9 +156,20 @@ def init_db():
                     google_id VARCHAR(255) UNIQUE,
                     profile_picture VARCHAR(500),
                     role VARCHAR(50) DEFAULT 'public',
+                    role_request VARCHAR(50) DEFAULT 'none',
+                    request_agency VARCHAR(255) NULL,
+                    request_designation VARCHAR(255) NULL,
+                    request_reason TEXT NULL,
                     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 );
                 """)
+                try:
+                    cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role_request VARCHAR(50) DEFAULT 'none';")
+                    cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS request_agency VARCHAR(255) NULL;")
+                    cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS request_designation VARCHAR(255) NULL;")
+                    cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS request_reason TEXT NULL;")
+                except Exception:
+                    pass
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS pothole_detections (
                     id SERIAL PRIMARY KEY,
@@ -230,9 +241,18 @@ def init_db():
                     google_id VARCHAR(255) UNIQUE,
                     profile_picture VARCHAR(500),
                     role VARCHAR(50) DEFAULT 'public',
+                    role_request VARCHAR(50) DEFAULT 'none',
+                    request_agency VARCHAR(255) NULL,
+                    request_designation VARCHAR(255) NULL,
+                    request_reason TEXT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 """)
+                for ucol, udef in [("role_request", "VARCHAR(50) DEFAULT 'none'"), ("request_agency", "VARCHAR(255) NULL"), ("request_designation", "VARCHAR(255) NULL"), ("request_reason", "TEXT NULL")]:
+                    try:
+                        cursor.execute(f"ALTER TABLE users ADD COLUMN `{ucol}` {udef}")
+                    except Exception:
+                        pass
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS pothole_detections (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -311,9 +331,18 @@ def init_db():
                     google_id TEXT UNIQUE,
                     profile_picture TEXT,
                     role TEXT DEFAULT 'public',
+                    role_request TEXT DEFAULT 'none',
+                    request_agency TEXT NULL,
+                    request_designation TEXT NULL,
+                    request_reason TEXT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 """)
+                for ucol, udef in [("role_request", "TEXT DEFAULT 'none'"), ("request_agency", "TEXT NULL"), ("request_designation", "TEXT NULL"), ("request_reason", "TEXT NULL")]:
+                    try:
+                        conn.execute(f"ALTER TABLE users ADD COLUMN {ucol} {udef}")
+                    except Exception:
+                        pass
                 conn.execute("""
                 CREATE TABLE IF NOT EXISTS pothole_detections (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

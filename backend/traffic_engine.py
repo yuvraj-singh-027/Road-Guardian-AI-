@@ -508,13 +508,25 @@ def simulate_traffic_rerouting(network: Any = None, closed_road_id: str = "Road_
         network = get_default_city_network()
 
     if not isinstance(closed_road_id, str):
-        closed_road_id = "Road_A"
+        closed_road_id = "Sec1_Blvd_N1"
 
+    # Resolve closed road by exact ID, name substring, alias, or index
     closed_seg = next((s for s in network if s["id"] == closed_road_id), None)
     if not closed_seg:
-        return {"error": f"Road segment {closed_road_id} not found."}
+        closed_seg = next((s for s in network if closed_road_id.lower() in s["id"].lower() or closed_road_id.lower() in s["name"].lower()), None)
+    if not closed_seg:
+        # Fallback alias mapping for Road A, Road B, etc.
+        alias_map = {"road_a": 0, "road_b": 1, "road_c": 2, "road_d": 3, "road_e": 4, "road_f": 5}
+        idx = alias_map.get(closed_road_id.lower().replace(" ", "_"), 0)
+        if idx < len(network):
+            closed_seg = network[idx]
+        else:
+            closed_seg = network[0] if network else None
 
-    diverted_traffic = closed_seg["base_traffic"]
+    if not closed_seg:
+        return {"error": f"Road segment '{closed_road_id}' not found."}
+
+    diverted_traffic = closed_seg.get("base_traffic", 1500)
 
     # Calculate alternate route capacity weights
     alt_routes = [s for s in network if s["id"] != closed_road_id]

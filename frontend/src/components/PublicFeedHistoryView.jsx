@@ -44,7 +44,9 @@ export default function PublicFeedHistoryView({ onNavigateToReport, onNavigateTo
           { id: 104, Image: 'pothole_connaught_place.jpg', Landmark: 'Connaught Place Inner Circle Block C', Latitude: 28.6315, Longitude: 77.2167, Severity: 'Low', Confidence: 0.69, Risk_Score: 32.1, Authenticity: 92, Status: 'RESOLVED', Time: 'Yesterday, 02:10 PM' },
         ]);
       })
-      .finally(() => setLoading);
+      .finally(() => {
+        setLoading(false);
+      });
   };
 
   const getSeverityBadgeClass = (severity) => {

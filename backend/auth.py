@@ -1145,25 +1145,131 @@ async def github_auth_status():
     client_id = os.getenv("GITHUB_CLIENT_ID")
     return {"configured": bool(client_id), "client_id": client_id}
 
-@router.post("/github/mock-login")
-async def mock_github_login(req: MockGitHubLoginRequest):
-    """Authenticates GitHub profile or mock sandbox login."""
-    user = get_user_by_email(req.email)
-    if not user:
-        success, user_id = create_user(
-            name=req.name,
-            email=req.email,
-            profile_picture=req.profile_picture,
-            role=req.role or "public",
-            is_verified=1
-        )
-        if not success or not user_id:
-            raise HTTPException(status_code=500, detail="Failed creating GitHub user.")
-        user = get_user_by_id(user_id)
+# --- Authority Access Application & Approval Workflow ---
 
-    token = create_access_token({"sub": str(user["id"]), "role": user["role"]})
-    return {
-        "token": token,
-        "token_type": "bearer",
-        "user": user
-    }
+class RoleRequestPayload(BaseModel):
+    agency: str = Field(..., min_length=2)
+    designation: str = Field(..., min_length=2)
+    reason: Optional[str] = None
+
+class RoleReviewPayload(BaseModel):
+    user_id: int
+    action: str  # "approve" | "reject"
+
+@router.post("/request-role")
+async def request_authority_role(
+    req: RoleRequestPayload,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Submits an official authority access request for an authenticated citizen.
+    Replaces client-side passcode self-upgrade with administrative approval.
+    """
+    if current_user.get("role") == "admin":
+        return {
+            "success": True,
+            "status": "already_admin",
+            "message": "You already hold Authority Administrator privileges."
+        }
+
+    conn, db_type = get_db_connection()
+    try:
+        if db_type in ["mysql", "postgres"]:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE users 
+                    SET role_request = 'pending',
+                        request_agency = %s,
+                        request_designation = %s,
+                        request_reason = %s
+                    WHERE id = %s
+                """, (req.agency.strip(), req.designation.strip(), req.reason.strip() if req.reason else None, current_user["id"]))
+        else:
+            with conn:
+                conn.execute("""
+                    UPDATE users 
+                    SET role_request = 'pending',
+                        request_agency = ?,
+                        request_designation = ?,
+                        request_reason = ?
+                    WHERE id = ?
+                """, (req.agency.strip(), req.designation.strip(), req.reason.strip() if req.reason else None, current_user["id"]))
+        
+        return {
+            "success": True,
+            "status": "pending",
+            "message": "Your Authority Access application has been submitted and is pending administrative review."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed submitting role request: {e}")
+    finally:
+        conn.close()
+
+@router.get("/role-requests")
+async def list_pending_role_requests(
+    admin: dict = Depends(require_admin)
+):
+    """Lists all pending authority role upgrade applications (Admin only)."""
+    conn, db_type = get_db_connection()
+    try:
+        if db_type in ["mysql", "postgres"]:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id, name, email, role, role_request, request_agency, request_designation, request_reason, created_at
+                    FROM users
+                    WHERE role_request = 'pending'
+                    ORDER BY id DESC
+                """)
+                rows = cursor.fetchall()
+                return {"requests": [dict(r) for r in rows]}
+        else:
+            cursor = conn.execute("""
+                SELECT id, name, email, role, role_request, request_agency, request_designation, request_reason, created_at
+                FROM users
+                WHERE role_request = 'pending'
+                ORDER BY id DESC
+            """)
+            rows = [dict(r) for r in cursor.fetchall()]
+            return {"requests": rows}
+    finally:
+        conn.close()
+
+@router.post("/review-role-request")
+async def review_role_request(
+    req: RoleReviewPayload,
+    admin: dict = Depends(require_admin)
+):
+    """Approves or rejects a citizen's authority access application."""
+    if req.action not in ["approve", "reject"]:
+        raise HTTPException(status_code=400, detail="Action must be 'approve' or 'reject'.")
+
+    new_role = "admin" if req.action == "approve" else "public"
+    new_request_status = "approved" if req.action == "approve" else "rejected"
+
+    conn, db_type = get_db_connection()
+    try:
+        if db_type in ["mysql", "postgres"]:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE users 
+                    SET role = %s, role_request = %s
+                    WHERE id = %s
+                """, (new_role, new_request_status, req.user_id))
+        else:
+            with conn:
+                conn.execute("""
+                    UPDATE users 
+                    SET role = ?, role_request = ?
+                    WHERE id = ?
+                """, (new_role, new_request_status, req.user_id))
+
+        return {
+            "success": True,
+            "action": req.action,
+            "message": f"User ID {req.user_id} role application has been {new_request_status}."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed reviewing role request: {e}")
+    finally:
+        conn.close()
+

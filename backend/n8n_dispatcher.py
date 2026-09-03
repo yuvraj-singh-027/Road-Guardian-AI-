@@ -16,14 +16,16 @@ if _env_path.exists():
                 _k, _v = _line.split("=", 1)
                 os.environ.setdefault(_k.strip(), _v.strip())
 
-# Read n8n webhook URL & token from environment variables or default
-DEFAULT_N8N_URL = "https://yuvi027.app.n8n.cloud/webhook-test/road-guardian-ai"
+# Read n8n webhook URL & auth credentials from environment variables or default
+DEFAULT_N8N_URL = "https://yuvi027.app.n8n.cloud/webhook/road-guardian-report"
 N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", DEFAULT_N8N_URL)
 N8N_WEBHOOK_TOKEN = os.getenv("N8N_WEBHOOK_TOKEN", "")
 N8N_HEADER_NAME = os.getenv("N8N_HEADER_NAME", "road-guardian-ai")
+N8N_AUTH_USER = os.getenv("N8N_AUTH_USER", "")
+N8N_AUTH_PASS = os.getenv("N8N_AUTH_PASS", "")
 
 def _get_alternate_url(url: str) -> Optional[str]:
-    """Generates production URL if test URL is passed, or vice-versa."""
+    """Generates production URL if test URL is passed, or vice-versa, across road-guardian-report and road-guardian-ai."""
     if "/webhook-test/" in url:
         return url.replace("/webhook-test/", "/webhook/")
     elif "/webhook/" in url:
@@ -40,7 +42,15 @@ def _get_headers() -> Dict[str, str]:
     if token:
         headers[header_name] = token
         headers["X-N8N-TOKEN"] = token
+        headers["Authorization"] = f"Bearer {token}"
     return headers
+
+def _get_auth():
+    user = os.getenv("N8N_AUTH_USER", N8N_AUTH_USER)
+    pwd = os.getenv("N8N_AUTH_PASS", N8N_AUTH_PASS)
+    if user or pwd:
+        return (user, pwd)
+    return None
 
 def trigger_n8n_event(event_type: str, payload: Dict[str, Any], webhook_url: Optional[str] = None) -> None:
     """
@@ -52,13 +62,25 @@ def trigger_n8n_event(event_type: str, payload: Dict[str, Any], webhook_url: Opt
         return
 
     def _async_post():
-        email_val = payload.get("reporter_email") or payload.get("email") or payload.get("user_email") or None
+        email_val = (
+            payload.get("user_email") or 
+            payload.get("reporter_email") or 
+            payload.get("email") or 
+            "citizen@roadguardian.gov"
+        )
+        
+        # Ensure all three aliases are explicitly set inside payload
+        payload["user_email"] = email_val
+        payload["reporter_email"] = email_val
+        payload["email"] = email_val
+
         event_body = {
             "system": "Road Guardian AI Digital Twin",
             "event": event_type,
             "timestamp": datetime.datetime.now().isoformat(),
-            "email": email_val,
+            "user_email": email_val,
             "reporter_email": email_val,
+            "email": email_val,
             "payload": payload
         }
         headers = _get_headers()
@@ -70,7 +92,7 @@ def trigger_n8n_event(event_type: str, payload: Dict[str, Any], webhook_url: Opt
 
         for attempt_url in urls_to_try:
             try:
-                response = requests.post(attempt_url, json=event_body, headers=headers, timeout=8)
+                response = requests.post(attempt_url, json=event_body, headers=headers, auth=_get_auth(), timeout=8)
                 if response.status_code in [200, 201, 202, 204]:
                     is_test_mode = "/webhook-test/" in attempt_url
                     mode_str = "TEST MODE" if is_test_mode else "ACTIVE PRODUCTION"
@@ -110,7 +132,7 @@ def test_n8n_connection(webhook_url: Optional[str] = None) -> Dict[str, Any]:
     last_error = None
     for attempt_url in urls_to_try:
         try:
-            res = requests.post(attempt_url, json=test_payload, headers=headers, timeout=6)
+            res = requests.post(attempt_url, json=test_payload, headers=headers, auth=_get_auth(), timeout=6)
             if res.status_code < 400:
                 is_test_mode = "/webhook-test/" in attempt_url
                 return {

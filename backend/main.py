@@ -583,21 +583,6 @@ def calculate_risk_endpoint(req: RiskCalculationRequest, current_user: Optional[
     )
     return res
 
-@app.get("/api/traffic/network")
-def get_traffic_network(center_lat: float = Query(28.6139), center_lon: float = Query(77.2090), current_user: Optional[dict] = Depends(get_current_user_optional)):
-    network = get_default_city_network(center_lat=center_lat, center_lon=center_lon)
-    return {
-        "center": [center_lat, center_lon],
-        "total_segments": len(network),
-        "segments": network
-    }
-
-@app.post("/api/traffic/reroute")
-def reroute_traffic_endpoint(req: TrafficRerouteRequest, current_user: dict = Depends(require_admin)):
-    network = get_default_city_network(center_lat=req.center_lat, center_lon=req.center_lon)
-    sim_result = simulate_traffic_rerouting(network, req.closed_road_id)
-    return sim_result
-
 @app.post("/api/detect/image")
 async def detect_image(
     file: UploadFile = File(...),
@@ -1093,6 +1078,20 @@ def transmit_report_endpoint(req: TransmitReportRequest, current_user: dict = De
     
     dispatch_ref = f"GOV-DISPATCH-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
     raw_hash = base64.b64encode(pdf_bytes[:30]).decode('ascii')[:16].upper()
+    officer_email = current_user.get("email") if isinstance(current_user, dict) else "authority@roadguardian.gov"
+
+    # Trigger n8n webhook automation event for official dispatch
+    trigger_n8n_event("REPORT_SUBMITTED", {
+        "submission_id": dispatch_ref,
+        "target_department": req.target_department,
+        "priority": req.priority,
+        "officer_notes": req.officer_notes or "Routine automated infrastructure audit transmission.",
+        "user_email": officer_email,
+        "reporter_email": officer_email,
+        "email": officer_email,
+        "detections_summary": req.detections_summary,
+        "critical_segments": req.critical_segments
+    })
     
     return {
         "status": "Transmitted & Acknowledged",
@@ -1126,10 +1125,58 @@ def evaluate_risk_compat(req: RiskCalculationRequest):
         proximity_school_hospital=req.proximity_school_hospital
     )
 
+@app.get("/api/traffic/network")
+def get_traffic_network_endpoint(center_lat: float = 28.6139, center_lon: float = 77.2090):
+    segments = get_default_city_network(center_lat=center_lat, center_lon=center_lon)
+    return {"segments": segments, "total": len(segments)}
+
+@app.post("/api/traffic/reroute")
+def trigger_traffic_reroute(req: TrafficRerouteRequest, current_user: Optional[dict] = Depends(get_current_user_optional)):
+    network = get_default_city_network(center_lat=req.center_lat, center_lon=req.center_lon)
+    raw_sim = simulate_traffic_rerouting(network, req.closed_road_id)
+    if "error" in raw_sim:
+        raise HTTPException(status_code=404, detail=raw_sim["error"])
+
+    closed_seg = raw_sim.get("closed_road") or {}
+    rerouting_data = raw_sim.get("rerouting_data") or []
+    
+    # Compute dynamic road-specific network metrics
+    overloaded_count = sum(1 for r in rerouting_data if r.get("new_vc_ratio", 0) > 0.90)
+    avg_vc = sum(r.get("new_vc_ratio", 0.5) for r in rerouting_data) / max(len(rerouting_data), 1)
+    congestion_index = round(avg_vc * 100, 1)
+
+    # Build updated network with dynamic simulated volumes
+    updated_network = []
+    for seg in network:
+        seg_copy = dict(seg)
+        if seg["id"] == req.closed_road_id:
+            seg_copy["simulated_traffic"] = 0
+            seg_copy["is_closed"] = True
+        else:
+            match = next((r for r in rerouting_data if r["id"] == seg["id"]), None)
+            if match:
+                seg_copy["simulated_traffic"] = match["new_traffic"]
+                seg_copy["pct_increase"] = match["pct_increase"]
+                seg_copy["new_vc_ratio"] = match["new_vc_ratio"]
+            else:
+                seg_copy["simulated_traffic"] = seg["base_traffic"]
+        updated_network.append(seg_copy)
+
+    return {
+        "closed_road_id": req.closed_road_id,
+        "closed_road_name": closed_seg.get("name", req.closed_road_id),
+        "displaced_traffic": raw_sim.get("diverted_volume", closed_seg.get("base_traffic", 1500)),
+        "overloaded_count": overloaded_count,
+        "congestion_index": congestion_index,
+        "prediction_text": raw_sim.get("prediction_text", ""),
+        "mitigation_steps": raw_sim.get("mitigation_steps", []),
+        "rerouting_data": rerouting_data,
+        "updated_network": updated_network
+    }
+
 @app.post("/api/simulate-traffic")
 def simulate_traffic_compat(req: TrafficRerouteRequest):
-    network = get_default_city_network(center_lat=req.center_lat, center_lon=req.center_lon)
-    return simulate_traffic_rerouting(network, req.closed_road_id)
+    return trigger_traffic_reroute(req)
 
 @app.post("/api/generate-pdf")
 def generate_pdf_compat(department: str = Form("Regional Infrastructure Authority")):

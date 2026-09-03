@@ -65,11 +65,11 @@ def detect_ai_generation(img_bgr: np.ndarray, pil_img: Optional[Image.Image] = N
 
         # Real physical camera sensors have high-frequency shot/thermal noise
         # AI generators decay high frequencies due to upsamplers
-        if hf_ratio < 0.08:
-            prob_components.append(0.25)
+        if hf_ratio < 0.05:
+            prob_components.append(0.24)
             signals_detected.append("High-frequency optical sensor noise decay (attenuated Fourier band)")
-        elif hf_ratio < 0.12:
-            prob_components.append(0.12)
+        elif hf_ratio < 0.08:
+            prob_components.append(0.10)
             signals_detected.append("Low high-frequency noise variance")
         else:
             prob_components.append(0.0)
@@ -91,11 +91,11 @@ def detect_ai_generation(img_bgr: np.ndarray, pil_img: Optional[Image.Image] = N
                         local_corrs.append((c_bg + c_gr) / 2.0)
 
         avg_local_corr = float(np.mean(local_corrs)) if local_corrs else 0.85
-        if avg_local_corr > 0.985:
+        if avg_local_corr > 0.992:
             prob_components.append(0.25)
-            signals_detected.append("Abnormally high local chromatic correlation (> 98.5%)")
-        elif avg_local_corr > 0.96:
-            prob_components.append(0.15)
+            signals_detected.append("Abnormally high local chromatic correlation (> 99.2%)")
+        elif avg_local_corr > 0.978:
+            prob_components.append(0.12)
             signals_detected.append("Elevated color channel co-linearity")
         else:
             prob_components.append(0.0)
@@ -106,11 +106,11 @@ def detect_ai_generation(img_bgr: np.ndarray, pil_img: Optional[Image.Image] = N
         eigenvalues, _ = np.linalg.eigh(cov)
         eigen_ratio = float(eigenvalues[0] / (eigenvalues[2] + 1e-8))
 
-        if eigen_ratio < 0.012:
+        if eigen_ratio < 0.008:
             prob_components.append(0.18)
             signals_detected.append("Compressed color covariance eigenvalue ratio (synthetic color plane)")
-        elif eigen_ratio < 0.024:
-            prob_components.append(0.09)
+        elif eigen_ratio < 0.016:
+            prob_components.append(0.08)
         else:
             prob_components.append(0.0)
 
@@ -125,10 +125,10 @@ def detect_ai_generation(img_bgr: np.ndarray, pil_img: Optional[Image.Image] = N
         hist = hist[hist > 0]
         entropy = float(-np.sum(hist * np.log2(hist + 1e-8)))
 
-        if texture_mean < 22.0 and entropy < 6.8:
-            prob_components.append(0.17)
+        if texture_mean < 16.0 and entropy < 6.2:
+            prob_components.append(0.18)
             signals_detected.append("Artificial surface smoothness and abnormally low gradient entropy")
-        elif texture_mean < 32.0:
+        elif texture_mean < 24.0 and entropy < 6.5:
             prob_components.append(0.08)
         else:
             prob_components.append(0.0)

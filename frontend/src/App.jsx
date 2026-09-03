@@ -209,14 +209,14 @@ export default function App() {
       </div>
       <h2 style={{ fontSize: '1.4rem', color: '#fff', marginBottom: '8px' }}>Authority Restricted Module</h2>
       <p style={{ color: '#a1a1aa', fontSize: '0.88rem', marginBottom: '24px', lineHeight: 1.5 }}>
-        This module requires Authority Admin credentials. Please authenticate using your official passcode to access city traffic simulations, multi-factor risk engines, and municipal audit reports.
+        This module requires Authority Administrator credentials. Please log in or switch to an authorized municipal account to access city traffic simulations, multi-factor risk engines, and municipal audit reports.
       </p>
       <button 
         className="btn-primary" 
         onClick={handleSwitchPortal}
         style={{ background: '#F59E0B', color: '#09090b', fontWeight: 600, width: '100%', justifyContent: 'center' }}
       >
-        <KeyRound size={16} /> Authenticate Authority Admin Access
+        <Lock size={16} /> Switch to Authority Portal
       </button>
     </div>
   );
@@ -327,7 +327,7 @@ export default function App() {
           />
         )}
 
-        <CitizenGuideWidget />
+        <CitizenGuideWidget userRole={userRole} />
       </div>
     );
   }
@@ -445,7 +445,7 @@ export default function App() {
         />
       )}
 
-      <CitizenGuideWidget />
+      <CitizenGuideWidget userRole={userRole} />
     </div>
   );
 }

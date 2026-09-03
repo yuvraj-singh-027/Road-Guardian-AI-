@@ -119,7 +119,12 @@ export default function RiskCalculatorView() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">YOLO Confidence ({Math.round(params.confidence * 100)}%):</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label className="form-label" style={{ margin: 0 }}>AI Vision Confidence:</label>
+                <span style={{ fontSize: '0.74rem', background: 'rgba(0, 230, 180, 0.15)', color: '#00E6B4', padding: '2px 8px', borderRadius: '6px', fontWeight: 700, border: '1px solid rgba(0, 230, 180, 0.3)' }}>
+                  {Math.round(params.confidence * 100)}%
+                </span>
+              </div>
               <input 
                 type="range" 
                 className="form-range"
@@ -134,7 +139,12 @@ export default function RiskCalculatorView() {
 
           <div className="grid-2" style={{ gap: '14px' }}>
             <div className="form-group">
-              <label className="form-label">Vehicle Speed ({params.speed_kmh} km/h):</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label className="form-label" style={{ margin: 0 }}>Average Vehicle Speed:</label>
+                <span style={{ fontSize: '0.74rem', background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B', padding: '2px 8px', borderRadius: '6px', fontWeight: 700, border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                  {params.speed_kmh} km/h
+                </span>
+              </div>
               <input 
                 type="range" 
                 className="form-range"
@@ -147,14 +157,19 @@ export default function RiskCalculatorView() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Detected Pothole Count:</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label className="form-label" style={{ margin: 0 }}>Detected Pothole Count:</label>
+                <span style={{ fontSize: '0.74rem', background: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', padding: '2px 8px', borderRadius: '6px', fontWeight: 700, border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                  {params.damage_count} Unit(s)
+                </span>
+              </div>
               <input 
                 type="number" 
                 className="form-input"
                 min="1" 
-                max="10"
+                max="20"
                 value={params.damage_count}
-                onChange={(e) => setParams({ ...params, damage_count: parseInt(e.target.value) || 1 })}
+                onChange={(e) => setParams({ ...params, damage_count: Math.max(1, parseInt(e.target.value) || 1) })}
               />
             </div>
           </div>
