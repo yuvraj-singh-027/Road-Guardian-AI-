@@ -13,7 +13,7 @@ export default function ReportGeneratorView() {
   const [n8nReceipt, setN8nReceipt] = useState(null);
 
   // Add state for database maintenance
-  const [dbPasscode, setDbPasscode] = useState('Admin123');
+  const [dbPasscode, setDbPasscode] = useState('');
   const [dbMessage, setDbMessage] = useState('');
   const [dbStatus, setDbStatus] = useState(null);
   const [isClearing, setIsClearing] = useState(false);

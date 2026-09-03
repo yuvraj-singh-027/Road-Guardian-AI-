@@ -39,13 +39,13 @@ export default function PortalSelectionModal({ onSelectRole }) {
       if (['Admin123', 'Admin@RoadGuardian2026', 'admin123', 'admin'].includes(passcode.trim())) {
         onSelectRole('admin');
       } else {
-        setErrorMsg('Invalid Passcode. Default Passcode: Admin123');
+        setErrorMsg('Invalid Authority Passcode.');
       }
     } catch (err) {
       if (['Admin123', 'Admin@RoadGuardian2026', 'admin123', 'admin'].includes(passcode.trim())) {
         onSelectRole('admin');
       } else {
-        setErrorMsg('Invalid Passcode. Default Passcode: Admin123');
+        setErrorMsg('Invalid Authority Passcode.');
       }
     } finally {
       setIsVerifying(false);
@@ -114,9 +114,6 @@ export default function PortalSelectionModal({ onSelectRole }) {
                 >
                   <Lock size={15} /> Authenticate Authority Access
                 </button>
-                <div style={{ marginTop: '8px', fontSize: '0.72rem', color: '#71717a', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                  <Info size={12} color="#F59E0B" /> Default Passcode: <strong style={{ color: '#F59E0B' }}>Admin@RoadGuardian2026</strong>
-                </div>
               </div>
             ) : (
               <form onSubmit={handleAdminAuth} style={{ marginTop: '14px', width: '100%' }}>
@@ -131,10 +128,6 @@ export default function PortalSelectionModal({ onSelectRole }) {
                     onChange={(e) => setPasscode(e.target.value)}
                     autoFocus
                   />
-                </div>
-                
-                <div style={{ fontSize: '0.72rem', color: '#71717a', marginBottom: '8px', textAlign: 'left' }}>
-                  Passcode: <code style={{ color: '#F59E0B', background: 'rgba(245,158,11,0.1)', padding: '2px 6px', borderRadius: '4px' }}>Admin@RoadGuardian2026</code>
                 </div>
 
                 {errorMsg && (
