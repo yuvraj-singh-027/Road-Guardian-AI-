@@ -6,9 +6,9 @@ import {
   ExternalLink, ArrowRight, ShieldAlert, Info
 } from 'lucide-react';
 
-export default function AuthenticityVerifierView({ onNavigateToDetection }) {
+export default function AuthenticityVerifierView({ onNavigateToDetection, initialImageUrl = null }) {
   const [selectedFile, setSelectedFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(initialImageUrl);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState(0);
   const [report, setReport] = useState(null);
@@ -21,6 +21,20 @@ export default function AuthenticityVerifierView({ onNavigateToDetection }) {
   const [useDeviceGps, setUseDeviceGps] = useState(false);
 
   const fileInputRef = useRef(null);
+
+  // Preload image if passed via props
+  React.useEffect(() => {
+    if (initialImageUrl) {
+      setPreviewUrl(initialImageUrl);
+      fetch(initialImageUrl)
+        .then(res => res.blob())
+        .then(blob => {
+          const file = new File([blob], "reported_hazard.jpg", { type: blob.type || "image/jpeg" });
+          setSelectedFile(file);
+        })
+        .catch(err => console.error("Preload image fetch error:", err));
+    }
+  }, [initialImageUrl]);
 
   // Verification Pipeline Steps for the loading animation
   const PIPELINE_STEPS = [

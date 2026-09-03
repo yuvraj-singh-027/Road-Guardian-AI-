@@ -6,10 +6,11 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Cart
 
 const getRiskColor = (severity) => {
   switch (severity) {
-    case 'Critical': return '#EF4444';
-    case 'High': return '#F59E0B';
-    case 'Medium': return '#38BDF8';
-    default: return '#475569';
+    case 'Critical': return '#EF4444'; // Neon Red
+    case 'High': return '#F59E0B';     // Neon Amber Gold
+    case 'Medium': return '#38BDF8';   // Electric Cyan
+    case 'Low': return '#00E6B4';      // Neon Mint Teal
+    default: return '#10B981';         // Emerald Green
   }
 };
 
@@ -155,7 +156,7 @@ export default function DigitalTwinMapView() {
           severity: road.severity,
           potholes: road.potholes,
           color: getRiskColor(road.severity),
-          width: selectedRoad?.id === road.id ? 8 : 5
+          width: selectedRoad?.id === road.id ? 10 : 7
         },
         geometry: {
           type: 'LineString',
@@ -174,39 +175,50 @@ export default function DigitalTwinMapView() {
       const existingMarkers = document.querySelectorAll('.mapboxgl-marker');
       existingMarkers.forEach(el => el.remove());
 
+      // Sample fallback hazards if database has no entries yet
+      const sampleFallback = [
+        { id: 101, Image: 'pothole_kasturba_gandhi.jpg', Landmark: 'Kasturba Gandhi Marg, Connaught Place', Latitude: 28.6258, Longitude: 77.2205, Severity: 'High', Risk_Score: 84.2 },
+        { id: 102, Image: 'pothole_barakhamba.jpg', Landmark: 'Barakhamba Road, Near Metro Gate 2', Latitude: 28.6295, Longitude: 77.2285, Severity: 'Medium', Risk_Score: 58.0 },
+        { id: 103, Image: 'pothole_rajiv_chowk.jpg', Landmark: 'Rajiv Chowk Radial Road 3', Latitude: 28.6328, Longitude: 77.2197, Severity: 'Critical', Risk_Score: 92.5 },
+        { id: 104, Image: 'pothole_ashoka.jpg', Landmark: 'Ashoka Road, India Gate Junction', Latitude: 28.6180, Longitude: 77.2140, Severity: 'Critical', Risk_Score: 89.0 },
+        { id: 105, Image: 'pothole_janpath.jpg', Landmark: 'Janpath Road, Near Cottage Industries', Latitude: 28.6210, Longitude: 77.2185, Severity: 'High', Risk_Score: 79.4 }
+      ];
+
       // Fetch dynamic database potholes
       fetch('/api/detections')
         .then(res => res.json())
         .then(data => {
-          if (data.success && data.detections && data.detections.length > 0) {
-            data.detections.forEach(d => {
-              if (!d.Longitude || !d.Latitude || d.Longitude === 0 || d.Latitude === 0) return;
-              
-              let markerColor = '#10B981';
-              if (d.Severity === 'Critical') markerColor = '#EF4444';
-              else if (d.Severity === 'High') markerColor = '#F59E0B';
-              else if (d.Severity === 'Medium') markerColor = '#38BDF8';
+          const detectionsToPlot = (data.success && data.detections && data.detections.length > 0) 
+            ? data.detections 
+            : sampleFallback;
 
-              const popup = new maptilersdk.Popup({ offset: 25 })
-                .setHTML(`
-                  <div style="color: #0f172a; font-family: sans-serif; font-size: 11px; padding: 2px;">
-                    <span style="color: ${markerColor}; font-weight: bold;">⚠️ Reported Pothole (${d.Severity})</span><br/>
-                    File: <b>${d.Image}</b><br/>
-                    Risk Score: <b>${d.Risk_Score}/100</b>
-                  </div>
-                `);
+          detectionsToPlot.forEach(d => {
+            if (!d.Longitude || !d.Latitude || d.Longitude === 0 || d.Latitude === 0) return;
+            
+            let markerColor = '#10B981';
+            if (d.Severity === 'Critical') markerColor = '#EF4444';
+            else if (d.Severity === 'High') markerColor = '#F59E0B';
+            else if (d.Severity === 'Medium') markerColor = '#38BDF8';
 
-              new maptilersdk.Marker({ color: markerColor, scale: 1.1 })
-                .setLngLat([d.Longitude, d.Latitude])
-                .setPopup(popup)
-                .addTo(map);
-            });
+            const popup = new maptilersdk.Popup({ offset: 25 })
+              .setHTML(`
+                <div style="color: #0f172a; font-family: sans-serif; font-size: 11px; padding: 2px;">
+                  <span style="color: ${markerColor}; font-weight: bold;">⚠️ Reported Hazard (${d.Severity})</span><br/>
+                  Landmark: <b>${d.Landmark || d.Image || 'City Road'}</b><br/>
+                  Risk Score: <b>${d.Risk_Score || 75}/100</b>
+                </div>
+              `);
 
-            const latest = data.detections.find(d => d.Longitude && d.Latitude && d.Longitude !== 0 && d.Latitude !== 0);
-            if (latest) {
-              map.setCenter([latest.Longitude, latest.Latitude]);
-              map.setZoom(14);
-            }
+            new maptilersdk.Marker({ color: markerColor, scale: 1.2 })
+              .setLngLat([parseFloat(d.Longitude), parseFloat(d.Latitude)])
+              .setPopup(popup)
+              .addTo(map);
+          });
+
+          const latest = detectionsToPlot.find(d => d.Longitude && d.Latitude && parseFloat(d.Longitude) !== 0 && parseFloat(d.Latitude) !== 0);
+          if (latest) {
+            map.setCenter([parseFloat(latest.Longitude), parseFloat(latest.Latitude)]);
+            map.setZoom(13.5);
           }
         })
         .catch(err => console.error('Error fetching dynamic potholes:', err));

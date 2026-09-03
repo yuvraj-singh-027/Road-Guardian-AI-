@@ -7,7 +7,6 @@ import DigitalTwinMapView from './components/DigitalTwinMapView';
 import TrafficRerouteView from './components/TrafficRerouteView';
 import RiskCalculatorView from './components/RiskCalculatorView';
 import ReportGeneratorView from './components/ReportGeneratorView';
-import AuthenticityVerifierView from './components/AuthenticityVerifierView';
 import MyReportsView from './components/MyReportsView';
 import PublicFeedHistoryView from './components/PublicFeedHistoryView';
 import N8nAutomationView from './components/N8nAutomationView';
@@ -15,7 +14,7 @@ import PublicNavbar from './components/PublicNavbar';
 import UserProfileModal from './components/UserProfileModal';
 import AuthPortal from './components/AuthPortal';
 import CitizenGuideWidget from './components/CitizenGuideWidget';
-import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, Lock, KeyRound, ArrowUpRight, Loader } from 'lucide-react';
+import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, Lock, KeyRound, ArrowUpRight, ArrowDownRight, Loader } from 'lucide-react';
 
 // --- GLOBAL FETCH TOKEN INTERCEPTOR ---
 if (typeof window !== 'undefined' && !window.__fetch_intercepted__) {
@@ -168,18 +167,13 @@ export default function App() {
         };
       case 'my-reports':
         return {
-          title: userRole === 'admin' ? 'Authority Road Hazard Complaint Registry' : 'My Road Hazard Reports & Tracking',
-          subtitle: 'Track real-time lifecycle stages, municipal assignment, repair progress, and AI reverification for submitted reports'
+          title: userRole === 'admin' ? 'Authority Reports & Municipal Audit Hub' : 'My Road Hazard Reports & Tracking',
+          subtitle: 'Track real-time lifecycle stages, municipal assignment, repair progress, PDF reports, and n8n workflows'
         };
       case 'public-feed':
         return {
           title: 'Recent Public Incident Reports (Live Feed)',
           subtitle: 'Live city-wide telemetry feed of verified road hazard reports, severity distribution, and spatial analytics'
-        };
-      case 'authenticity':
-        return {
-          title: 'Image Authenticity Verification Engine',
-          subtitle: 'Autonomous 7-layer forensic verification pipeline for incident and hazard evidence validation'
         };
       case 'digital-twin':
         return {
@@ -312,14 +306,9 @@ export default function App() {
               <PublicFeedHistoryView 
                 onNavigateToReport={() => setActiveTab('detection')} 
               />
-            ) : activeTab === 'authenticity' ? (
-              <AuthenticityVerifierView 
-                onNavigateToDetection={(file) => setActiveTab('detection')} 
-              />
             ) : (
               <AIDetectionView 
                 userRole={userRole} 
-                onNavigateToAuthenticity={() => setActiveTab('authenticity')}
                 onNavigateToReports={() => setActiveTab('my-reports')}
               />
             )}
@@ -367,60 +356,57 @@ export default function App() {
           setIsMobileOpen={setIsMobileOpen}
         />
 
-        {/* Global Summary Metric Banner — shadcn Stat Cards */}
-        <div className="grid-4" style={{ marginBottom: '24px' }}>
-          <div className="stat-card">
-            <div>
-              <div className="stat-label">Scanned Segments</div>
-              <div className="stat-val">{summaryStats?.total_scanned !== undefined ? summaryStats.total_scanned : 142}</div>
-              <div style={{ fontSize: '0.72rem', color: '#00E6B4', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                <ArrowUpRight size={12} /> +14.2% from last week
+        {/* Global Summary Metric Banner — 3 Clean Metric Cards (Exclusively on Digital Twin Map view) */}
+        {activeTab === 'digital-twin' && (
+          <div className="grid-3" style={{ marginBottom: '24px' }}>
+            <div className="stat-card">
+              <div>
+                <div className="stat-label">Total Scanned Hazards</div>
+                <div className="stat-val">{summaryStats?.total_scanned ?? 0}</div>
+                <div style={{ fontSize: '0.72rem', color: summaryStats?.trend_direction === 'down' ? '#10B981' : '#00E6B4', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                  {summaryStats?.trend_direction === 'down' ? <ArrowDownRight size={12} /> : <ArrowUpRight size={12} />}
+                  {summaryStats?.trend_percent !== undefined 
+                    ? `${summaryStats.trend_percent >= 0 ? '+' : ''}${summaryStats.trend_percent}% from last week` 
+                    : '+14.2% from last week'}
+                </div>
+              </div>
+              <div className="stat-icon-wrapper" style={{ background: 'rgba(0,230,180,0.1)' }}>
+                <Activity size={20} color="#00E6B4" />
               </div>
             </div>
-            <div className="stat-icon-wrapper" style={{ background: 'rgba(0,230,180,0.1)' }}>
-              <Activity size={20} color="#00E6B4" />
-            </div>
-          </div>
 
-          <div className="stat-card">
-            <div>
-              <div className="stat-label">Critical Potholes</div>
-              <div className="stat-val" style={{ color: '#EF4444' }}>{summaryStats?.critical_potholes !== undefined ? summaryStats.critical_potholes : 18}</div>
-              <div style={{ fontSize: '0.72rem', color: '#EF4444', marginTop: '4px' }}>
-                Action Required
+            <div className="stat-card">
+              <div>
+                <div className="stat-label">Critical Potholes</div>
+                <div className="stat-val" style={{ color: '#EF4444' }}>{summaryStats?.critical_potholes !== undefined ? summaryStats.critical_potholes : 18}</div>
+                <div style={{ fontSize: '0.72rem', color: '#EF4444', marginTop: '4px' }}>
+                  Action Required
+                </div>
+              </div>
+              <div className="stat-icon-wrapper" style={{ background: 'rgba(239,68,68,0.1)' }}>
+                <ShieldAlert size={20} color="#EF4444" />
               </div>
             </div>
-            <div className="stat-icon-wrapper" style={{ background: 'rgba(239,68,68,0.1)' }}>
-              <ShieldAlert size={20} color="#EF4444" />
-            </div>
-          </div>
 
-          <div className="stat-card">
-            <div>
-              <div className="stat-label">City Risk Score</div>
-              <div className="stat-val" style={{ color: '#F59E0B' }}>{summaryStats?.active_road_risk_score !== undefined ? summaryStats.active_road_risk_score : 68.4}</div>
-              <div style={{ fontSize: '0.72rem', color: '#F59E0B', marginTop: '4px' }}>
-                Risk Level
+            <div className="stat-card">
+              <div>
+                <div className="stat-label">Average City Risk (All Scans)</div>
+                <div className="stat-val" style={{ color: '#F59E0B' }}>{summaryStats?.active_road_risk_score !== undefined ? summaryStats.active_road_risk_score : 68.4}</div>
+                <div style={{ 
+                  fontSize: '0.72rem', 
+                  color: (summaryStats?.active_road_risk_score || 0) > 70 ? '#EF4444' : (summaryStats?.active_road_risk_score || 0) > 35 ? '#F59E0B' : '#10B981', 
+                  marginTop: '4px',
+                  fontWeight: 600 
+                }}>
+                  {(summaryStats?.active_road_risk_score || 0) > 70 ? 'High Risk Level' : (summaryStats?.active_road_risk_score || 0) > 35 ? 'Moderate Risk Level' : 'Low Risk Level'}
+                </div>
+              </div>
+              <div className="stat-icon-wrapper" style={{ background: 'rgba(245,158,11,0.1)' }}>
+                <Cpu size={20} color="#F59E0B" />
               </div>
             </div>
-            <div className="stat-icon-wrapper" style={{ background: 'rgba(245,158,11,0.1)' }}>
-              <Cpu size={20} color="#F59E0B" />
-            </div>
           </div>
-
-          <div className="stat-card">
-            <div>
-              <div className="stat-label">Digital Twin Nodes</div>
-              <div className="stat-val" style={{ color: '#38BDF8' }}>{summaryStats?.digital_twin_nodes !== undefined ? summaryStats.digital_twin_nodes : 6}</div>
-              <div style={{ fontSize: '0.72rem', color: '#38BDF8', marginTop: '4px' }}>
-                Live Spatial Stream
-              </div>
-            </div>
-            <div className="stat-icon-wrapper" style={{ background: 'rgba(56,189,248,0.1)' }}>
-              <Map size={20} color="#38BDF8" />
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* Dynamic View Component */}
         {activeTab === 'detection' && (
@@ -442,16 +428,9 @@ export default function App() {
             onNavigateToMap={() => setActiveTab('digital-twin')} 
           />
         )}
-        {activeTab === 'authenticity' && (
-          <AuthenticityVerifierView 
-            onNavigateToDetection={(file) => setActiveTab('detection')} 
-          />
-        )}
         {activeTab === 'digital-twin' && <DigitalTwinMapView />}
-        {activeTab === 'n8n-automation' && <N8nAutomationView />}
         {activeTab === 'traffic-reroute' && (userRole === 'admin' ? <TrafficRerouteView /> : renderRestrictedAccessNotice())}
         {activeTab === 'risk-calculator' && (userRole === 'admin' ? <RiskCalculatorView /> : renderRestrictedAccessNotice())}
-        {activeTab === 'municipal-report' && (userRole === 'admin' ? <ReportGeneratorView /> : renderRestrictedAccessNotice())}
       </div>
 
       {showProfileModal && (

@@ -36,16 +36,16 @@ export default function PortalSelectionModal({ onSelectRole }) {
         }
       }
 
-      if (['Admin@RoadGuardian2026', 'admin123', 'admin'].includes(passcode.trim())) {
+      if (['Admin123', 'Admin@RoadGuardian2026', 'admin123', 'admin'].includes(passcode.trim())) {
         onSelectRole('admin');
       } else {
-        setErrorMsg('Invalid Passcode. Default Passcode: Admin@RoadGuardian2026');
+        setErrorMsg('Invalid Passcode. Default Passcode: Admin123');
       }
     } catch (err) {
-      if (['Admin@RoadGuardian2026', 'admin123', 'admin'].includes(passcode.trim())) {
+      if (['Admin123', 'Admin@RoadGuardian2026', 'admin123', 'admin'].includes(passcode.trim())) {
         onSelectRole('admin');
       } else {
-        setErrorMsg('Invalid Passcode. Default Passcode: Admin@RoadGuardian2026');
+        setErrorMsg('Invalid Passcode. Default Passcode: Admin123');
       }
     } finally {
       setIsVerifying(false);

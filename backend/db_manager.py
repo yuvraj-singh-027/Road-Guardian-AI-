@@ -63,15 +63,19 @@ def get_db_connection():
     supabase_url = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
     if POSTGRES_AVAILABLE and supabase_url:
         try:
+            # Format connection URL for SSL compatibility
+            target_url = supabase_url
+            if "sslmode" not in target_url.lower():
+                target_url += ("&sslmode=require" if "?" in target_url else "?sslmode=require")
+
             conn = psycopg2.connect(
-                supabase_url,
-                cursor_factory=psycopg2.extras.RealDictCursor,
-                sslmode=os.getenv("PGSSLMODE", "require")
+                target_url,
+                cursor_factory=psycopg2.extras.RealDictCursor
             )
             conn.autocommit = True
             return conn, "postgres"
         except Exception as pg_err:
-            print(f"[Supabase / PostgreSQL Connection Warning]: {pg_err}")
+            print(f"[Supabase / PostgreSQL Connection Warning]: Connection failed ({pg_err}). Falling back to next engine...")
 
     # 2. MySQL database connection
     mysql_host = os.getenv("MYSQL_HOST")
@@ -1095,35 +1099,57 @@ def get_all_detections(user_id: Optional[int] = None) -> pd.DataFrame:
         conn.close()
 
 
+USER_CLEARED_FLAG = os.path.join(BASE_DIR, ".user_cleared_db")
+
 def clear_all_detections() -> Tuple[bool, str]:
-    """Clears all records from the pothole_detections table."""
+    """Clears all records from the pothole_detections table across PostgreSQL, MySQL, and SQLite."""
     conn, db_type = get_db_connection()
     try:
-        if db_type == "mysql":
+        if db_type == "postgres":
             with conn.cursor() as cursor:
-                cursor.execute("TRUNCATE TABLE pothole_detections")
-        else:
+                cursor.execute("TRUNCATE TABLE pothole_detections RESTART IDENTITY CASCADE;")
+                cursor.execute("TRUNCATE TABLE authenticity_audits RESTART IDENTITY CASCADE;")
+                cursor.execute("TRUNCATE TABLE report_status_history RESTART IDENTITY CASCADE;")
+        elif db_type == "mysql":
+            with conn.cursor() as cursor:
+                cursor.execute("TRUNCATE TABLE pothole_detections;")
+                cursor.execute("TRUNCATE TABLE authenticity_audits;")
+                cursor.execute("TRUNCATE TABLE report_status_history;")
+        else: # sqlite
             with conn:
-                conn.execute("DELETE FROM pothole_detections")
-        return True, "All detection records successfully cleared from database."
+                conn.execute("DELETE FROM pothole_detections;")
+                conn.execute("DELETE FROM authenticity_audits;")
+                conn.execute("DELETE FROM report_status_history;")
+                conn.execute("VACUUM;")
+
+        # Set user cleared flag to prevent auto CSV re-seeding
+        try:
+            with open(USER_CLEARED_FLAG, "w") as f:
+                f.write("1")
+        except Exception as ex:
+            print(f"[Clear DB Flag Warning]: {ex}")
+
+        return True, "All detection records, audits, and report histories successfully cleared from database."
     except Exception as e:
+        print(f"[Clear DB Error]: {e}")
         return False, f"Clear database failed: {e}"
     finally:
         conn.close()
 
 
 def delete_detection(detection_id: int) -> Tuple[bool, str]:
-    """Deletes a single record by ID."""
+    """Deletes a single record by ID across PostgreSQL, MySQL, and SQLite."""
     conn, db_type = get_db_connection()
     try:
-        if db_type == "mysql":
+        if db_type in ["postgres", "mysql"]:
             with conn.cursor() as cursor:
                 cursor.execute("DELETE FROM pothole_detections WHERE id = %s", (detection_id,))
-        else:
+        else: # sqlite
             with conn:
                 conn.execute("DELETE FROM pothole_detections WHERE id = ?", (detection_id,))
         return True, f"Record #{detection_id} deleted."
     except Exception as e:
+        print(f"[Delete Record Error]: {e}")
         return False, f"Delete failed: {e}"
     finally:
         conn.close()
@@ -1132,7 +1158,11 @@ def delete_detection(detection_id: int) -> Tuple[bool, str]:
 def migrate_csv_to_db():
     """
     Checks if legacy pothole_data.csv exists and migrates records into the database if DB is empty.
+    Skipped if user explicitly cleared database.
     """
+    if os.path.exists(USER_CLEARED_FLAG):
+        return # User intentionally cleared database, do not auto-repopulate sample CSV
+
     if not os.path.exists(CSV_FILE_PATH):
         return
 

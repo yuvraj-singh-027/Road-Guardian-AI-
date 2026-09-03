@@ -13,12 +13,9 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
   } else {
     navItems = [
       { id: 'digital-twin', label: 'Digital Twin City Map', icon: Map, badge: 'Spatial' },
-      { id: 'my-reports', label: 'Citizen Reports Registry', icon: ClipboardList, badge: 'Triage' },
-      { id: 'n8n-automation', label: 'n8n Automation Hub', icon: Zap, badge: 'Workflow' },
+      { id: 'my-reports', label: 'Reports & Municipal Audit', icon: ClipboardList, badge: 'Unified' },
       { id: 'traffic-reroute', label: 'Traffic Simulator', icon: Cpu, badge: 'Layer 4' },
       { id: 'risk-calculator', label: 'Risk Engine Evaluator', icon: ShieldAlert, badge: 'Layer 2' },
-      { id: 'municipal-report', label: 'Audit PDF Generator', icon: FileText, badge: 'Export' },
-      { id: 'authenticity', label: 'Authenticity Verifier', icon: ShieldCheck, badge: 'Forensics' },
     ];
   }
 

@@ -3,10 +3,12 @@ import {
   ClipboardList, Clock, CheckCircle2, AlertTriangle, ShieldCheck, 
   MapPin, Eye, Search, Filter, RefreshCw, ChevronRight, X, ArrowRight,
   User, Check, AlertCircle, Wrench, ShieldAlert, Cpu, Sparkles, Send,
-  PieChart as PieIcon, BarChart2, History
+  PieChart as PieIcon, BarChart2, History, FileText, Zap
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import PublicFeedHistoryView from './PublicFeedHistoryView';
+import ReportGeneratorView from './ReportGeneratorView';
+import AuthenticityVerifierView from './AuthenticityVerifierView';
 
 export default function MyReportsView({ userRole, onNavigateToDetection, initialSubTab = 'my-reports' }) {
   const [subTab, setSubTab] = useState(initialSubTab);
@@ -182,7 +184,7 @@ export default function MyReportsView({ userRole, onNavigateToDetection, initial
     <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
       {/* Merged View Sub-Navigation Tabs */}
-      <div style={{ display: 'flex', gap: '8px', background: '#18181b', padding: '4px', borderRadius: '12px', border: '1px solid #27272a', width: 'fit-content' }}>
+      <div style={{ display: 'flex', gap: '8px', background: '#18181b', padding: '4px', borderRadius: '12px', border: '1px solid #27272a', width: 'fit-content', flexWrap: 'wrap' }}>
         <button
           onClick={() => setSubTab('my-reports')}
           style={{
@@ -203,6 +205,32 @@ export default function MyReportsView({ userRole, onNavigateToDetection, initial
           <ClipboardList size={16} color={subTab === 'my-reports' ? '#00E6B4' : '#71717a'} />
           <span>{userRole === 'admin' ? 'Citizen Complaint Registry' : 'My Reports & Tracking'}</span>
         </button>
+
+        {userRole === 'admin' && (
+          <>
+            <button
+              onClick={() => setSubTab('municipal-report')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                border: 'none',
+                background: subTab === 'municipal-report' ? 'rgba(0, 230, 180, 0.15)' : 'transparent',
+                color: subTab === 'municipal-report' ? '#00E6B4' : '#a1a1aa',
+                fontWeight: subTab === 'municipal-report' ? 700 : 500,
+                fontSize: '0.84rem',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <FileText size={16} color={subTab === 'municipal-report' ? '#00E6B4' : '#71717a'} />
+              <span>Audit PDF Generator & n8n Dispatch</span>
+            </button>
+          </>
+        )}
+
         <button
           onClick={() => setSubTab('public-feed')}
           style={{
@@ -221,7 +249,7 @@ export default function MyReportsView({ userRole, onNavigateToDetection, initial
           }}
         >
           <History size={16} color={subTab === 'public-feed' ? '#00E6B4' : '#71717a'} />
-          <span>Incident History Feed (Live)</span>
+          <span>Incident History Feed</span>
         </button>
       </div>
 
@@ -232,6 +260,8 @@ export default function MyReportsView({ userRole, onNavigateToDetection, initial
             if (onNavigateToDetection) onNavigateToDetection();
           }} 
         />
+      ) : subTab === 'municipal-report' ? (
+        <ReportGeneratorView />
       ) : (
         <React.Fragment>
           {/* Header Banner */}
@@ -504,6 +534,24 @@ export default function MyReportsView({ userRole, onNavigateToDetection, initial
                     </span>
                   </div>
 
+                  {/* Attached Photograph Preview */}
+                  {report.image_name && (
+                    <div style={{ width: '100%', height: '140px', borderRadius: '8px', overflow: 'hidden', marginBottom: '12px', position: 'relative', border: '1px solid #27272a', background: '#09090b' }}>
+                      <img 
+                        src={report.image_name?.startsWith('http') ? report.image_name : `/potholes/${report.image_name}`} 
+                        alt="Attached Road Damage Photograph"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=600&auto=format&fit=crop&q=60';
+                        }}
+                      />
+                      <div style={{ position: 'absolute', bottom: '6px', right: '6px', background: 'rgba(9, 9, 11, 0.85)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem', color: '#a1a1aa', border: '1px solid #27272a' }}>
+                        📷 Attached Photo Evidence
+                      </div>
+                    </div>
+                  )}
+
                   {/* Hazard Title & Location */}
                   <div style={{ marginBottom: '12px' }}>
                     <div style={{ fontSize: '0.98rem', fontWeight: 700, color: '#fff', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -656,6 +704,31 @@ export default function MyReportsView({ userRole, onNavigateToDetection, initial
                 </div>
               </div>
             </div>
+
+            {/* Attached Photo Evidence Card */}
+            {selectedReport.image_name && (
+              <div style={{ marginBottom: '24px', background: '#121217', borderRadius: '10px', overflow: 'hidden', border: '1px solid #27272a' }}>
+                <div style={{ padding: '10px 14px', background: '#18181b', borderBottom: '1px solid #27272a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#a1a1aa', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    📷 Attached Photographic Evidence
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: '#00E6B4' }}>
+                    File: {selectedReport.image_name}
+                  </span>
+                </div>
+                <div style={{ width: '100%', height: '240px', background: '#09090b', overflow: 'hidden' }}>
+                  <img 
+                    src={selectedReport.image_name?.startsWith('http') ? selectedReport.image_name : `/potholes/${selectedReport.image_name}`}
+                    alt="Attached Road Damage Evidence"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=600&auto=format&fit=crop&q=60';
+                    }}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* 8-STAGE VISUAL LIFECYCLE ROADMAP */}
             <div style={{ marginBottom: '28px' }}>

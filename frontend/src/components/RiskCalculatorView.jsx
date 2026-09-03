@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, Gauge, Sliders, CheckCircle2, Sparkles, BarChart2 } from 'lucide-react';
+import { ShieldAlert, Gauge, Sliders, CheckCircle2, Sparkles, BarChart2, ShieldCheck } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, CartesianGrid } from 'recharts';
+import AuthenticityVerifierView from './AuthenticityVerifierView';
 
 export default function RiskCalculatorView() {
+  const [subTab, setSubTab] = useState('risk-calculator');
   const [params, setParams] = useState({
     severity: 'High',
     confidence: 0.88,
@@ -39,7 +41,56 @@ export default function RiskCalculatorView() {
   }));
 
   return (
-    <div>
+    <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      
+      {/* Sub-Navigation Tabs */}
+      <div style={{ display: 'flex', gap: '8px', background: '#18181b', padding: '4px', borderRadius: '12px', border: '1px solid #27272a', width: 'fit-content' }}>
+        <button
+          onClick={() => setSubTab('risk-calculator')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: 'none',
+            background: subTab === 'risk-calculator' ? 'rgba(0, 230, 180, 0.15)' : 'transparent',
+            color: subTab === 'risk-calculator' ? '#00E6B4' : '#a1a1aa',
+            fontWeight: subTab === 'risk-calculator' ? 700 : 500,
+            fontSize: '0.84rem',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <ShieldAlert size={16} color={subTab === 'risk-calculator' ? '#00E6B4' : '#71717a'} />
+          <span>Multi-Factor Risk Score Engine</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab('authenticity')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: 'none',
+            background: subTab === 'authenticity' ? 'rgba(0, 230, 180, 0.15)' : 'transparent',
+            color: subTab === 'authenticity' ? '#00E6B4' : '#a1a1aa',
+            fontWeight: subTab === 'authenticity' ? 700 : 500,
+            fontSize: '0.84rem',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <ShieldCheck size={16} color={subTab === 'authenticity' ? '#00E6B4' : '#71717a'} />
+          <span>Image Authenticity & Forensics</span>
+        </button>
+      </div>
+
+      {subTab === 'authenticity' ? (
+        <AuthenticityVerifierView />
+      ) : (
       <div className="grid-2" style={{ gap: '20px' }}>
         {/* Controls Panel */}
         <div className="glass-card">
@@ -231,6 +282,7 @@ export default function RiskCalculatorView() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
