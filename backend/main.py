@@ -1330,6 +1330,22 @@ def clear_db_compat(req: ClearDBRequest, current_user: dict = Depends(require_ad
 # Mount built React frontend (frontend/dist) or fallback static HTML
 frontend_dist_path = BASE_DIR.parent / "frontend" / "dist"
 static_path = BASE_DIR / "static"
+
+@app.exception_handler(404)
+async def custom_404_handler(request, exc):
+    """
+    Catch-all SPA 404 handler for client-side React pushState routing on Render.
+    """
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(status_code=404, content={"detail": "API endpoint not found"})
+    index_file = frontend_dist_path / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    fallback_static = static_path / "index.html"
+    if fallback_static.exists():
+        return FileResponse(fallback_static)
+    return JSONResponse(status_code=404, content={"detail": "Not Found"})
+
 if frontend_dist_path.exists():
     from fastapi.staticfiles import StaticFiles
     app.mount("/", StaticFiles(directory=str(frontend_dist_path), html=True), name="frontend_dist")
