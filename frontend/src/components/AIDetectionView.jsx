@@ -34,6 +34,9 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchTimeoutRef = useRef(null);
+
+  // Reporter contact email (for public anonymous users)
+  const [reporterEmail, setReporterEmail] = useState('');
   
   // Historical public hazard reports feed
   const [recentReports, setRecentReports] = useState([]);
@@ -172,27 +175,34 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
       return;
     }
     setIsFetchingGps(true);
+    setShowLocationFields(true);
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const lat = position.coords.latitude;
         const lon = position.coords.longitude;
-        const acc = Math.round(position.coords.accuracy || 10);
-        setManualLat(lat.toFixed(6));
-        setManualLon(lon.toFixed(6));
+        const acc = Math.round(position.coords.accuracy || 5);
+        const formattedLat = lat.toFixed(6);
+        const formattedLon = lon.toFixed(6);
+
+        setManualLat(formattedLat);
+        setManualLon(formattedLon);
         setGpsAccuracy(acc);
         setExifWarning(false);
 
         const addr = await resolvePreciseAddress(lat, lon);
-        setLandmarkName(addr);
+        const preciseLocationStr = `${addr} (📍 ${formattedLat}°, ${formattedLon}°)`;
+        setLandmarkName(preciseLocationStr);
         setIsFetchingGps(false);
       },
       (err) => {
         console.error(err);
-        alert('Could not fetch device GPS. Defaulting to New Delhi coordinates.');
-        setManualLat('28.613900');
-        setManualLon('77.209000');
-        setGpsAccuracy(10);
-        setLandmarkName('Kartavya Path, Raisina Hill, New Delhi, Delhi, PIN: 110004');
+        alert('Could not fetch device GPS. Defaulting to high-precision New Delhi coordinates.');
+        const defaultLat = '28.613900';
+        const defaultLon = '77.209000';
+        setManualLat(defaultLat);
+        setManualLon(defaultLon);
+        setGpsAccuracy(5);
+        setLandmarkName(`Kartavya Path, Raisina Hill, New Delhi, PIN: 110004 (📍 ${defaultLat}°, ${defaultLon}°)`);
         setIsFetchingGps(false);
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
@@ -240,6 +250,12 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
   const handleRunDetection = async () => {
     if (!selectedFile) return;
 
+    const hasLocation = Boolean((landmarkName && landmarkName.trim()) || (manualLat && manualLon));
+    if (!hasLocation) {
+      alert('Address Required: Please type a street address or click "Use My GPS" before scanning.');
+      return;
+    }
+
     setIsProcessing(true);
     setFakeImageWarning(null);
 
@@ -252,6 +268,9 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
     }
     if (landmarkName.trim()) {
       formData.append('landmark_name', landmarkName.trim());
+    }
+    if (reporterEmail && reporterEmail.trim()) {
+      formData.append('reporter_email', reporterEmail.trim());
     }
 
     try {
@@ -269,11 +288,28 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
       }
 
       const data = await response.json().catch(() => null);
- 
-      if (!response.ok) {
-        throw new Error(`API Error: ${data?.detail || response.statusText || 'Server Error'}`);
+
+      // HTTP 422 = Authenticity Engine rejected the image (suspicious/tampered)
+      if (response.status === 422 && data?.detail?.rejected) {
+        const detail = data.detail;
+        setDetectionResult({
+          _rejected: true,
+          rejection_reason: detail.reason,
+          authenticity_score: detail.authenticity_score,
+          message: detail.message,
+        });
+        setActiveImageView('yolo');
+        setIsProcessing(false);
+        return;
       }
- 
+
+      if (!response.ok) {
+        const errorDetail = Array.isArray(data?.detail)
+          ? data.detail.map(d => d.msg || JSON.stringify(d)).join(', ')
+          : (typeof data?.detail === 'string' ? data.detail : response.statusText || 'Server Error');
+        throw new Error(`API Error: ${errorDetail}`);
+      }
+
       setDetectionResult(data);
       setActiveImageView('yolo');
       fetchHistory();
@@ -360,14 +396,17 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
       // Auto GPS Geotagging for live webcam capture
       if (!manualLat && navigator.geolocation) {
         setIsFetchingGps(true);
+        setShowLocationFields(true);
         navigator.geolocation.getCurrentPosition(
           async (position) => {
             const lat = position.coords.latitude;
             const lon = position.coords.longitude;
-            setManualLat(lat.toFixed(6));
-            setManualLon(lon.toFixed(6));
+            const formattedLat = lat.toFixed(6);
+            const formattedLon = lon.toFixed(6);
+            setManualLat(formattedLat);
+            setManualLon(formattedLon);
             const addr = await resolvePreciseAddress(lat, lon);
-            setLandmarkName(addr);
+            setLandmarkName(`${addr} (📍 ${formattedLat}°, ${formattedLon}°)`);
             setIsFetchingGps(false);
           },
           () => {
@@ -680,39 +719,94 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
                 </div>
               </div>
 
-              <div style={{ marginTop: '14px', display: 'flex', gap: '10px' }}>
-                <button 
-                  className="btn-primary" 
-                  disabled={!selectedFile || isProcessing}
-                  onClick={handleRunDetection}
-                  style={{ flex: 2, opacity: (!selectedFile || isProcessing) ? 0.6 : 1, padding: '10px 14px', gap: '8px', fontSize: '0.84rem' }}
-                >
-                  {isProcessing ? <RefreshCw className="spin" size={16} /> : <Sparkles size={16} />}
-                  {isProcessing ? 'Evaluating Model & Authenticity...' : 'Run AI Hazard Scanner'}
-                </button>
+              {/* Reporter Email — shown only to public/anonymous users */}
+              {(userRole === 'public' || userRole === undefined) && (
+                <div style={{ marginTop: '10px', padding: '10px 12px', background: '#18181b', borderRadius: '10px', border: '1px solid var(--border-muted)' }}>
+                  <div style={{ fontSize: '0.78rem', color: '#a78bfa', fontWeight: 600, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>✉️</span> Your Email Address <span style={{ color: '#52525b', fontWeight: 400 }}>(optional — for status updates)</span>
+                  </div>
+                  <input
+                    type="email"
+                    className="form-input"
+                    placeholder="e.g. citizen@example.com"
+                    value={reporterEmail}
+                    onChange={(e) => setReporterEmail(e.target.value)}
+                    style={{ padding: '8px 12px', fontSize: '0.82rem', width: '100%', borderColor: reporterEmail ? '#7c3aed' : undefined }}
+                  />
+                  <div style={{ fontSize: '0.68rem', color: '#52525b', marginTop: '4px' }}>
+                    Your email will be stored securely and forwarded to the city authority's n8n workflow for status notifications.
+                  </div>
+                </div>
+              )}
 
-                <button 
-                  type="button"
-                  className="btn-secondary" 
-                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                  style={{ flex: 1, padding: '10px', gap: '6px', fontSize: '0.8rem' }}
-                  title="Browse photo file from device"
-                >
-                  <Upload size={15} color="#00E6B4" /> Browse File
-                </button>
+              {(() => {
+                const hasLocation = Boolean((landmarkName && landmarkName.trim()) || (manualLat && manualLon));
+                const isScannerDisabled = !selectedFile || !hasLocation || isProcessing;
+                return (
+                  <>
+                    <div style={{ marginTop: '14px', display: 'flex', gap: '10px' }}>
+                      <button 
+                        className="btn-primary" 
+                        disabled={isScannerDisabled}
+                        onClick={handleRunDetection}
+                        style={{ 
+                          flex: 2, 
+                          opacity: isScannerDisabled ? 0.5 : 1, 
+                          cursor: isScannerDisabled ? 'not-allowed' : 'pointer',
+                          padding: '10px 14px', 
+                          gap: '8px', 
+                          fontSize: '0.84rem' 
+                        }}
+                        title={!hasLocation ? 'Address Required: Please enter street address or click "Use My GPS"' : ''}
+                      >
+                        {isProcessing ? <RefreshCw className="spin" size={16} /> : <Sparkles size={16} />}
+                        {isProcessing ? 'Evaluating Model & Authenticity...' : 'Run AI Hazard Scanner'}
+                      </button>
 
-                {userRole === 'public' && (
-                  <button 
-                    type="button"
-                    className="btn-secondary" 
-                    onClick={startCamera}
-                    style={{ flex: 1, padding: '10px', gap: '6px', fontSize: '0.8rem' }}
-                    title="Open Camera / Live WebCam"
-                  >
-                    <Camera size={15} color="#38BDF8" /> Camera
-                  </button>
-                )}
-              </div>
+                      <button 
+                        type="button"
+                        className="btn-secondary" 
+                        onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                        style={{ flex: 1, padding: '10px', gap: '6px', fontSize: '0.8rem' }}
+                        title="Browse photo file from device"
+                      >
+                        <Upload size={15} color="#00E6B4" /> Browse File
+                      </button>
+
+                      {userRole === 'public' && (
+                        <button 
+                          type="button"
+                          className="btn-secondary" 
+                          onClick={startCamera}
+                          style={{ flex: 1, padding: '10px', gap: '6px', fontSize: '0.8rem' }}
+                          title="Open Camera / Live WebCam"
+                        >
+                          <Camera size={15} color="#38BDF8" /> Camera
+                        </button>
+                      )}
+                    </div>
+
+                    {selectedFile && !hasLocation && (
+                      <div style={{
+                        marginTop: '10px',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        background: 'rgba(245, 158, 11, 0.12)',
+                        border: '1px solid rgba(245, 158, 11, 0.35)',
+                        color: '#F59E0B',
+                        fontSize: '0.76rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontWeight: 500
+                      }}>
+                        <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                        <span>Address Required: Please enter street landmark above or click <strong>"Use My GPS"</strong> to enable the scanner.</span>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -730,7 +824,51 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
 
           {detectionResult ? (
             <div>
-              {/* STAGE 1: AUTHENTICITY VERIFICATION WARNING / BANNER */}
+              {/* AUTHENTICITY GATE REJECTION CARD — shown when image is blocked before YOLO */}
+              {detectionResult._rejected && (
+                <div style={{
+                  marginBottom: '16px',
+                  padding: '18px 20px',
+                  borderRadius: '12px',
+                  border: '1.5px solid rgba(239,68,68,0.7)',
+                  background: 'rgba(239,68,68,0.08)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '1.5rem' }}>🚫</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#ef4444' }}>
+                        Image Rejected by Authenticity Engine
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#fca5a5', marginTop: '2px' }}>
+                        This image did not pass the pre-YOLO authenticity gate
+                      </div>
+                    </div>
+                    <span style={{
+                      marginLeft: 'auto',
+                      padding: '3px 10px',
+                      borderRadius: '20px',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      background: 'rgba(239,68,68,0.2)',
+                      color: '#ef4444',
+                      border: '1px solid rgba(239,68,68,0.4)'
+                    }}>
+                      Score: {detectionResult.authenticity_score != null ? `${Math.round(detectionResult.authenticity_score)}/100` : 'N/A'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: '#fca5a5', background: 'rgba(0,0,0,0.3)', padding: '10px 14px', borderRadius: '8px', borderLeft: '3px solid #ef4444' }}>
+                    <strong>Reason:</strong> {detectionResult.rejection_reason || 'High Risk Tampered Image'}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#a1a1aa', lineHeight: 1.5 }}>
+                    ⚠️ YOLO detection was skipped. Please upload an <strong>original, unedited photo</strong> taken directly from a camera or phone.
+                  </div>
+                </div>
+              )}
+
+              {/* STAGE 1: AUTHENTICITY VERIFICATION WARNING / BANNER (for passed images) */}
               {detectionResult.authenticity && (
                 <div style={{
                   marginBottom: '14px',

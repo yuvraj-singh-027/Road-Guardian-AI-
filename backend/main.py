@@ -31,7 +31,7 @@ try:
         get_historical_phashes, log_authenticity_audit, get_authenticity_history,
         insert_detection, get_user_reports, get_report_by_id_with_history, update_report_status
     )
-    from .auth import router as auth_router, get_current_user, require_admin
+    from .auth import router as auth_router, get_current_user, get_current_user_optional, require_admin
     from .n8n_dispatcher import trigger_n8n_event, test_n8n_connection
 except ImportError as e:
     try:
@@ -44,7 +44,7 @@ except ImportError as e:
             get_historical_phashes, log_authenticity_audit, get_authenticity_history,
             insert_detection, get_user_reports, get_report_by_id_with_history, update_report_status
         )
-        from auth import router as auth_router, get_current_user, require_admin
+        from auth import router as auth_router, get_current_user, get_current_user_optional, require_admin
         from n8n_dispatcher import trigger_n8n_event, test_n8n_connection
     except Exception:
         raise RuntimeError(f"Failed to import core engines: {e}")
@@ -520,11 +520,11 @@ def get_dashboard_summary(current_user: dict):
     }
 
 @app.get("/api/stats/summary")
-def get_stats_summary_endpoint(current_user: dict = Depends(get_current_user)):
+def get_stats_summary_endpoint(current_user: Optional[dict] = Depends(get_current_user_optional)):
     return get_dashboard_summary(current_user)
 
 @app.get("/api/overview")
-def get_overview_endpoint(current_user: dict = Depends(get_current_user)):
+def get_overview_endpoint(current_user: Optional[dict] = Depends(get_current_user_optional)):
     summary = get_dashboard_summary(current_user)
     
     # Add backward compatibility keys for static HTML portal
@@ -534,7 +534,7 @@ def get_overview_endpoint(current_user: dict = Depends(get_current_user)):
     summary["critical_segments_count"] = summary["critical_potholes"]
     
     try:
-        user_id = current_user["id"] if current_user.get("role") == "public" else None
+        user_id = current_user["id"] if (current_user and current_user.get("role") == "public") else None
         df = get_all_detections(user_id=user_id)
         if not df.empty:
             recent_list = []
@@ -570,7 +570,7 @@ def verify_admin_passcode(req: AdminVerifyRequest):
     return JSONResponse(status_code=401, content={"success": False, "message": "Invalid Passcode"})
 
 @app.post("/api/risk/calculate")
-def calculate_risk_endpoint(req: RiskCalculationRequest, current_user: dict = Depends(get_current_user)):
+def calculate_risk_endpoint(req: RiskCalculationRequest, current_user: Optional[dict] = Depends(get_current_user_optional)):
     res = calculate_road_risk(
         severity=req.severity,
         confidence=req.confidence,
@@ -584,7 +584,7 @@ def calculate_risk_endpoint(req: RiskCalculationRequest, current_user: dict = De
     return res
 
 @app.get("/api/traffic/network")
-def get_traffic_network(center_lat: float = Query(28.6139), center_lon: float = Query(77.2090), current_user: dict = Depends(get_current_user)):
+def get_traffic_network(center_lat: float = Query(28.6139), center_lon: float = Query(77.2090), current_user: Optional[dict] = Depends(get_current_user_optional)):
     network = get_default_city_network(center_lat=center_lat, center_lon=center_lon)
     return {
         "center": [center_lat, center_lon],
@@ -604,9 +604,17 @@ async def detect_image(
     manual_lat: Optional[float] = Form(None),
     manual_lon: Optional[float] = Form(None),
     landmark_name: Optional[str] = Form(None),
-    current_user: dict = Depends(get_current_user)
+    reporter_email: Optional[str] = Form(None),
+    current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
     contents = await file.read()
+
+    # Resolve reporter email: prefer logged-in user's email, fall back to form-submitted email
+    resolved_email: Optional[str] = None
+    if current_user and isinstance(current_user, dict):
+        resolved_email = current_user.get("email") or reporter_email or None
+    else:
+        resolved_email = reporter_email or None
 
     # 1. BASIC IMAGE VALIDATION LAYER
     validate_uploaded_image(contents, file.filename or "uploaded_hazard.jpg", file.content_type or "")
@@ -637,6 +645,25 @@ async def detect_image(
             is_fake = True
             threats = authenticity_info.get("threat_reasons", [])
             rejection_reason = threats[0] if threats else f"High Risk Tampered Image ({score}/100)"
+
+    # ── AUTHENTICITY GATE ─────────────────────────────────────────────────────
+    # SUSPICIOUS images are STOPPED HERE — they never reach the YOLO detector.
+    # This enforces the pipeline: Authenticity Engine → gate → YOLO (only trusted images).
+    if is_fake:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "rejected": True,
+                "reason": rejection_reason,
+                "authenticity_score": authenticity_info.get("authenticity_score") if authenticity_info else None,
+                "message": (
+                    "⚠️ This image was flagged as suspicious or tampered by the Authenticity Engine "
+                    "and cannot be processed for road hazard detection. "
+                    "Please upload an original, unedited photograph taken directly from a camera."
+                )
+            }
+        )
+    # ─────────────────────────────────────────────────────────────────────────
 
     # Priority: Manual User Provided GPS > Image EXIF GPS > Default Fallback (New Delhi)
     location_source = "Image EXIF GPS"
@@ -835,17 +862,20 @@ async def detect_image(
     _, encoded_img = cv2.imencode('.jpg', img_bgr)
     b64_str = base64.b64encode(encoded_img).decode('utf-8')
 
+    logged_report_id = None
+
     # Persist the detection to database & potholes folder (only if a hazard was actually detected)
     if pothole_count > 0:
         try:
             potholes_dir = BASE_DIR / "potholes"
             potholes_dir.mkdir(exist_ok=True)
             
-            # Save the exact original clean image to potholes directory (Option A)
+            # Save the ORIGINAL uploaded image (exact bytes the user submitted)
+            # so the file on disk is identical to what was uploaded.
             out_filename = f"detect_{int(time.time())}_{file.filename or 'uploaded.jpg'}"
             out_path = potholes_dir / out_filename
             with open(out_path, "wb") as f:
-                f.write(contents)
+                f.write(contents)  # contents = raw original upload bytes
             
             # Call database insert
             try:
@@ -863,7 +893,8 @@ async def detect_image(
                 severity=highest_severity,
                 confidence=max_conf,
                 time_val=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                user_id=current_user["id"],
+                user_id=current_user.get("id") if (current_user and isinstance(current_user, dict)) else None,
+                reporter_email=resolved_email,
                 phash=current_phash,
                 authenticity_score=auth_score_val,
                 landmark_name=resolved_landmark,
@@ -899,6 +930,8 @@ async def detect_image(
             "max_confidence": round(max_conf, 3),
             "risk_score": risk_info.get("final_score") if isinstance(risk_info, dict) else None,
             "gps": {"latitude": lat, "longitude": lon},
+            "reporter_email": resolved_email,
+            "reporter_name": current_user.get("name") if (current_user and isinstance(current_user, dict)) else "Anonymous Citizen",
             "status": "AI_VERIFIED"
         })
 

@@ -307,7 +307,7 @@ def get_user_by_email(email: str) -> Optional[dict]:
     conn, db_type = get_db_connection()
     try:
         email_clean = email.strip().lower()
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM users WHERE LOWER(email) = %s LIMIT 1", (email_clean,))
                 row = cursor.fetchone()
@@ -322,7 +322,7 @@ def get_user_by_email(email: str) -> Optional[dict]:
 def get_user_by_id(user_id: int) -> Optional[dict]:
     conn, db_type = get_db_connection()
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM users WHERE id = %s LIMIT 1", (user_id,))
                 row = cursor.fetchone()
@@ -337,7 +337,7 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
 def get_user_by_google_id(google_id: str) -> Optional[dict]:
     conn, db_type = get_db_connection()
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM users WHERE google_id = %s LIMIT 1", (google_id,))
                 row = cursor.fetchone()
@@ -364,7 +364,7 @@ def create_user(
     v_token = secrets.token_urlsafe(32) if is_verified == 0 else None
 
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO users (name, email, password_hash, is_verified, verification_token, google_id, profile_picture, role)
@@ -388,7 +388,7 @@ def create_user(
 def update_user_verification(user_id: int, is_verified: int):
     conn, db_type = get_db_connection()
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("UPDATE users SET is_verified = %s, verification_token = NULL WHERE id = %s", (is_verified, user_id))
         else:
@@ -400,7 +400,7 @@ def update_user_verification(user_id: int, is_verified: int):
 def update_user_reset_token(user_id: int, token: Optional[str], expires: Optional[str]):
     conn, db_type = get_db_connection()
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("UPDATE users SET reset_token = %s, reset_token_expires = %s WHERE id = %s", (token, expires, user_id))
         else:
@@ -412,7 +412,7 @@ def update_user_reset_token(user_id: int, token: Optional[str], expires: Optiona
 def update_user_password(user_id: int, new_password_hash: str):
     conn, db_type = get_db_connection()
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("UPDATE users SET password_hash = %s, reset_token = NULL, reset_token_expires = NULL WHERE id = %s", (new_password_hash, user_id))
         else:
@@ -424,7 +424,7 @@ def update_user_password(user_id: int, new_password_hash: str):
 def update_user_role(user_id: int, role: str):
     conn, db_type = get_db_connection()
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("UPDATE users SET role = %s WHERE id = %s", (role, user_id))
         else:
@@ -472,6 +472,14 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="User account not found.")
 
     return user
+
+
+async def get_current_user_optional(request: Request) -> Optional[dict]:
+    """FastAPI Dependency to retrieve current user if authenticated, or return None if anonymous."""
+    try:
+        return await get_current_user(request)
+    except HTTPException:
+        return None
 
 
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
@@ -627,7 +635,7 @@ async def resend_verification(req: ResendVerificationRequest):
         # Save new token
         conn, db_type = get_db_connection()
         try:
-            if db_type == "mysql":
+            if db_type in ["mysql", "postgres"]:
                 with conn.cursor() as cursor:
                     cursor.execute("UPDATE users SET verification_token = %s WHERE id = %s", (v_token, user["id"]))
             else:
@@ -644,7 +652,7 @@ async def verify_email_endpoint(token: str = Query(...)):
     conn, db_type = get_db_connection()
     user = None
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM users WHERE verification_token = %s LIMIT 1", (token,))
                 row = cursor.fetchone()
@@ -719,7 +727,7 @@ async def reset_password(req: ResetPasswordRequest):
     conn, db_type = get_db_connection()
     user = None
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM users WHERE reset_token = %s LIMIT 1", (req.token,))
                 row = cursor.fetchone()
@@ -803,7 +811,7 @@ async def google_mock_login(req: MockGoogleLoginRequest, response: Response):
             # Bind google_id and photo
             conn, db_type = get_db_connection()
             try:
-                if db_type == "mysql":
+                if db_type in ["mysql", "postgres"]:
                     with conn.cursor() as cursor:
                         cursor.execute("UPDATE users SET google_id = %s, profile_picture = %s WHERE id = %s", 
                                        (req.google_id, req.profile_picture, user["id"]))
@@ -933,7 +941,7 @@ async def google_standard_callback(code: str, request: Request, response: Respon
                 # Merge existing email account
                 conn, db_type = get_db_connection()
                 try:
-                    if db_type == "mysql":
+                    if db_type in ["mysql", "postgres"]:
                         with conn.cursor() as cursor:
                             cursor.execute("UPDATE users SET google_id = %s, profile_picture = %s WHERE id = %s", 
                                            (google_id, picture, user["id"]))

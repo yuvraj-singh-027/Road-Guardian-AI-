@@ -133,7 +133,7 @@ def get_db_connection():
 _DB_INITIALIZED = False
 
 def init_db():
-    """Initializes the users and pothole_detections table schemas if they do not exist."""
+    """Initializes the users and pothole_detections table schemas and runs column migrations."""
     global _DB_INITIALIZED
     if _DB_INITIALIZED:
         return
@@ -173,6 +173,7 @@ def init_db():
                     risk_score DOUBLE PRECISION,
                     image_hash VARCHAR(64),
                     user_id INT NULL,
+                    reporter_email VARCHAR(255) NULL,
                     status VARCHAR(50) DEFAULT 'AI_VERIFIED',
                     landmark_name VARCHAR(255) NULL,
                     description TEXT NULL,
@@ -207,6 +208,13 @@ def init_db():
                     changed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 );
                 """)
+                # Add reporter_email column to existing Postgres tables if it doesn't exist yet
+                try:
+                    cursor.execute(
+                        "ALTER TABLE pothole_detections ADD COLUMN IF NOT EXISTS reporter_email VARCHAR(255) NULL;"
+                    )
+                except Exception:
+                    pass  # Column already exists or unsupported (no-op)
         elif db_type == "mysql":
             with conn.cursor() as cursor:
                 cursor.execute("""
@@ -239,6 +247,7 @@ def init_db():
                     risk_score DOUBLE,
                     image_hash VARCHAR(64),
                     user_id INT NULL,
+                    reporter_email VARCHAR(255) NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 """)
@@ -269,6 +278,7 @@ def init_db():
                 # Try adding dynamic columns if missing on existing MySQL table
                 cols_to_add = [
                     ("user_id", "INT NULL"),
+                    ("reporter_email", "VARCHAR(255) NULL"),
                     ("phash", "VARCHAR(64) NULL"),
                     ("authenticity_score", "FLOAT NULL"),
                     ("status", "VARCHAR(50) DEFAULT 'AI_VERIFIED'"),
@@ -317,6 +327,7 @@ def init_db():
                     risk_score REAL,
                     image_hash TEXT,
                     user_id INTEGER NULL,
+                    reporter_email TEXT NULL,
                     phash TEXT,
                     authenticity_score REAL,
                     status TEXT DEFAULT 'AI_VERIFIED',
@@ -354,6 +365,7 @@ def init_db():
                 # Try adding dynamic columns if missing on existing SQLite table
                 sqlite_cols = [
                     ("user_id", "INTEGER"),
+                    ("reporter_email", "TEXT"),
                     ("phash", "TEXT"),
                     ("authenticity_score", "REAL"),
                     ("status", "TEXT DEFAULT 'AI_VERIFIED'"),
@@ -411,7 +423,7 @@ def is_duplicate_detection(
     try:
         # 1. Exact Image Hash Deduplication
         if img_hash:
-            if db_type == "mysql":
+            if db_type in ["mysql", "postgres"]:
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT id FROM pothole_detections WHERE image_hash = %s LIMIT 1", (img_hash,))
                     row = cursor.fetchone()
@@ -423,7 +435,7 @@ def is_duplicate_detection(
 
         # 2. Spatial & Temporal Proximity Deduplication
         if lat_num != 0.0 and lon_num != 0.0:
-            if db_type == "mysql":
+            if db_type in ["mysql", "postgres"]:
                 with conn.cursor() as cursor:
                     cursor.execute("""
                         SELECT id, lat_numeric, lon_numeric, time, severity FROM pothole_detections
@@ -477,6 +489,7 @@ def insert_detection(
     image_bytes_or_path: Any = None,
     skip_dedup: bool = False,
     user_id: Optional[int] = None,
+    reporter_email: Optional[str] = None,
     phash: str = "",
     authenticity_score: Optional[float] = None,
     landmark_name: Optional[str] = None,
@@ -525,25 +538,25 @@ def insert_detection(
     conn, db_type = get_db_connection()
     inserted_id = None
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO pothole_detections 
                     (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, 
-                     risk_score, image_hash, user_id, phash, authenticity_score, landmark_name, description, damage_type, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     risk_score, image_hash, user_id, reporter_email, phash, authenticity_score, landmark_name, description, damage_type, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, 
-                      risk_score, img_hash, user_id, phash or None, authenticity_score, landmark_name, description, damage_type, status))
+                      risk_score, img_hash, user_id, reporter_email or None, phash or None, authenticity_score, landmark_name, description, damage_type, status))
                 inserted_id = cursor.lastrowid
         else: # sqlite
             with conn:
                 cursor = conn.execute("""
                     INSERT INTO pothole_detections 
                     (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, 
-                     risk_score, image_hash, user_id, phash, authenticity_score, landmark_name, description, damage_type, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     risk_score, image_hash, user_id, reporter_email, phash, authenticity_score, landmark_name, description, damage_type, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, 
-                      risk_score, img_hash, user_id, phash or None, authenticity_score, landmark_name, description, damage_type, status))
+                      risk_score, img_hash, user_id, reporter_email or None, phash or None, authenticity_score, landmark_name, description, damage_type, status))
                 inserted_id = cursor.lastrowid
     except Exception as e:
         return False, f"Database insertion error: {e}", None
@@ -589,7 +602,7 @@ def add_status_history(
     msg = message or f"Status updated to {label}"
     conn, db_type = get_db_connection()
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO report_status_history (report_id, status, status_label, message, changed_by)
@@ -623,7 +636,7 @@ def get_user_reports(
     conn, db_type = get_db_connection()
     reports = []
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 if is_admin:
                     query = """
@@ -732,7 +745,7 @@ def get_report_by_id_with_history(
     conn, db_type = get_db_connection()
     try:
         # 1. Fetch report record
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT p.*, u.name as user_name, u.email as user_email
@@ -762,7 +775,7 @@ def get_report_by_id_with_history(
 
         # 3. Fetch chronological status history
         history_events = []
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT id, status, status_label, message, changed_by, changed_at
@@ -868,7 +881,7 @@ def update_report_status(
 
     conn, db_type = get_db_connection()
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     UPDATE pothole_detections 
@@ -907,7 +920,7 @@ def get_historical_phashes() -> List[Dict[str, Any]]:
     conn, db_type = get_db_connection()
     results = []
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id, image_name, phash, time as created_at FROM pothole_detections WHERE phash IS NOT NULL AND phash != '' ORDER BY id DESC LIMIT 500")
                 rows1 = cursor.fetchall()
@@ -958,7 +971,7 @@ def log_authenticity_audit(
     report_json_str = json.dumps(slim_report)
 
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO authenticity_audits 
@@ -989,7 +1002,7 @@ def get_authenticity_history(limit: int = 20) -> List[Dict[str, Any]]:
     conn, db_type = get_db_connection()
     import json
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM authenticity_audits ORDER BY id DESC LIMIT %s", (limit,))
                 rows = cursor.fetchall()
@@ -1025,7 +1038,7 @@ def get_all_detections(user_id: Optional[int] = None) -> pd.DataFrame:
     init_db()
     conn, db_type = get_db_connection()
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 if user_id is not None:
                     cursor.execute("SELECT * FROM pothole_detections WHERE user_id = %s ORDER BY id DESC", (user_id,))
@@ -1170,7 +1183,7 @@ def migrate_csv_to_db():
     try:
         # Check if database table already contains records
         count = 0
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) as cnt FROM pothole_detections")
                 row = cursor.fetchone()
@@ -1218,7 +1231,7 @@ def seed_demo_data_if_empty():
     conn, db_type = get_db_connection()
     try:
         count = 0
-        if db_type == "mysql":
+        if db_type in ["mysql", "postgres"]:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) as cnt FROM pothole_detections")
                 row = cursor.fetchone()
