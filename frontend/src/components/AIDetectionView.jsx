@@ -256,6 +256,13 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
       return;
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const hasValidEmail = userRole === 'admin' || (reporterEmail && emailRegex.test(reporterEmail.trim()));
+    if (!hasValidEmail) {
+      alert('Email Required: Please enter a valid email address (e.g. citizen@example.com) to submit this road hazard report.');
+      return;
+    }
+
     setIsProcessing(true);
     setFakeImageWarning(null);
 
@@ -719,31 +726,78 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
                 </div>
               </div>
 
-              {/* Reporter Email — shown only to public/anonymous users */}
-              {(userRole === 'public' || userRole === undefined) && (
-                <div style={{ marginTop: '10px', padding: '10px 12px', background: '#18181b', borderRadius: '10px', border: '1px solid var(--border-muted)' }}>
-                  <div style={{ fontSize: '0.78rem', color: '#a78bfa', fontWeight: 600, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>✉️</span> Your Email Address <span style={{ color: '#52525b', fontWeight: 400 }}>(optional — for status updates)</span>
+              {/* Reporter Email — Mandatory for public/anonymous users */}
+              {(userRole === 'public' || userRole === undefined) && (() => {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                const isEmailValid = reporterEmail && emailRegex.test(reporterEmail.trim());
+                return (
+                  <div style={{ 
+                    marginTop: '10px', 
+                    padding: '12px 14px', 
+                    background: '#18181b', 
+                    borderRadius: '10px', 
+                    border: isEmailValid ? '1px solid rgba(16, 185, 129, 0.4)' : (selectedFile && !reporterEmail ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--border-muted)')
+                  }}>
+                    <div style={{ fontSize: '0.78rem', color: '#a78bfa', fontWeight: 600, marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>✉️</span> Your Email Address <strong style={{ color: '#EF4444' }}>*</strong>
+                      </span>
+                      <span style={{ fontSize: '0.68rem', color: isEmailValid ? '#10B981' : '#EF4444', fontWeight: 500 }}>
+                        {isEmailValid ? '✓ Valid Email' : 'Required to submit'}
+                      </span>
+                    </div>
+                    <input
+                      type="email"
+                      className="form-input"
+                      placeholder="Enter your email (e.g. citizen@example.com)"
+                      value={reporterEmail}
+                      onChange={(e) => setReporterEmail(e.target.value)}
+                      required
+                      style={{ 
+                        padding: '8px 12px', 
+                        fontSize: '0.82rem', 
+                        width: '100%', 
+                        borderColor: isEmailValid ? '#10B981' : (reporterEmail ? '#EF4444' : undefined) 
+                      }}
+                    />
+                    <div style={{ fontSize: '0.68rem', color: '#71717a', marginTop: '4px' }}>
+                      Mandatory — Used to send live repair progress updates and forward the hazard report to city authority workflows.
+                    </div>
                   </div>
-                  <input
-                    type="email"
-                    className="form-input"
-                    placeholder="e.g. citizen@example.com"
-                    value={reporterEmail}
-                    onChange={(e) => setReporterEmail(e.target.value)}
-                    style={{ padding: '8px 12px', fontSize: '0.82rem', width: '100%', borderColor: reporterEmail ? '#7c3aed' : undefined }}
-                  />
-                  <div style={{ fontSize: '0.68rem', color: '#52525b', marginTop: '4px' }}>
-                    Your email will be stored securely and forwarded to the city authority's n8n workflow for status notifications.
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {(() => {
                 const hasLocation = Boolean((landmarkName && landmarkName.trim()) || (manualLat && manualLon));
-                const isScannerDisabled = !selectedFile || !hasLocation || isProcessing;
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                const hasValidEmail = userRole === 'admin' || (reporterEmail && emailRegex.test(reporterEmail.trim()));
+                const isScannerDisabled = !selectedFile || !hasLocation || !hasValidEmail || isProcessing;
                 return (
                   <>
+                    {/* Prompt banner if image is selected but email or location is missing */}
+                    {selectedFile && (!hasLocation || !hasValidEmail) && !isProcessing && (
+                      <div style={{ 
+                        marginTop: '10px', 
+                        padding: '8px 12px', 
+                        background: 'rgba(245, 158, 11, 0.08)', 
+                        border: '1px solid rgba(245, 158, 11, 0.3)', 
+                        borderRadius: '8px', 
+                        fontSize: '0.74rem', 
+                        color: '#F59E0B', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '6px' 
+                      }}>
+                        <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                        <span>
+                          {!hasLocation && !hasValidEmail
+                            ? 'Please provide a street location AND your email address before scanning.'
+                            : (!hasLocation ? 'Please enter a street location or click "Use My GPS" before scanning.' : 'Please enter your email address to enable the scanner.')
+                          }
+                        </span>
+                      </div>
+                    )}
+
                     <div style={{ marginTop: '14px', display: 'flex', gap: '10px' }}>
                       <button 
                         className="btn-primary" 
@@ -757,7 +811,11 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
                           gap: '8px', 
                           fontSize: '0.84rem' 
                         }}
-                        title={!hasLocation ? 'Address Required: Please enter street address or click "Use My GPS"' : ''}
+                        title={
+                          !hasLocation && !hasValidEmail 
+                            ? 'Location and Email required to run scan' 
+                            : (!hasLocation ? 'Location required' : (!hasValidEmail ? 'Email address required' : ''))
+                        }
                       >
                         {isProcessing ? <RefreshCw className="spin" size={16} /> : <Sparkles size={16} />}
                         {isProcessing ? 'Evaluating Model & Authenticity...' : 'Run AI Hazard Scanner'}

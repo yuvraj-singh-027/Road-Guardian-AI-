@@ -616,6 +616,13 @@ async def detect_image(
     else:
         resolved_email = reporter_email or None
 
+    # Enforce mandatory email address for all hazard submissions
+    if not resolved_email or not resolved_email.strip() or "@" not in resolved_email or "." not in resolved_email:
+        raise HTTPException(
+            status_code=400,
+            detail="A valid email address is required to submit and track this road hazard report."
+        )
+
     # 1. BASIC IMAGE VALIDATION LAYER
     validate_uploaded_image(contents, file.filename or "uploaded_hazard.jpg", file.content_type or "")
 
