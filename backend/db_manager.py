@@ -220,10 +220,11 @@ def init_db():
                     changed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 );
                 """)
-                # Add user_email and reporter_email column to existing Postgres tables if they don't exist yet
+                # Add user_email, reporter_email, and user_gmail columns to existing Postgres tables if they don't exist yet
                 try:
                     cursor.execute("ALTER TABLE pothole_detections ADD COLUMN IF NOT EXISTS user_email VARCHAR(255) NULL;")
                     cursor.execute("ALTER TABLE pothole_detections ADD COLUMN IF NOT EXISTS reporter_email VARCHAR(255) NULL;")
+                    cursor.execute("ALTER TABLE pothole_detections ADD COLUMN IF NOT EXISTS user_gmail VARCHAR(255) NULL;")
                 except Exception:
                     pass  # Column already exists or unsupported (no-op)
         elif db_type == "mysql":
@@ -300,6 +301,7 @@ def init_db():
                     ("user_id", "INT NULL"),
                     ("user_email", "VARCHAR(255) NULL"),
                     ("reporter_email", "VARCHAR(255) NULL"),
+                    ("user_gmail", "VARCHAR(255) NULL"),
                     ("phash", "VARCHAR(64) NULL"),
                     ("authenticity_score", "FLOAT NULL"),
                     ("status", "VARCHAR(50) DEFAULT 'AI_VERIFIED'"),
@@ -392,20 +394,21 @@ def init_db():
                     changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 """)
-                # Try adding dynamic columns if missing on existing SQLite table
-                sqlite_cols = [
-                    ("user_id", "INTEGER"),
-                    ("user_email", "TEXT"),
-                    ("reporter_email", "TEXT"),
-                    ("phash", "TEXT"),
-                    ("authenticity_score", "REAL"),
+                # Dynamically add user_email, reporter_email, user_gmail, and metadata columns if missing
+                cols_sqlite = [
+                    ("user_id", "INTEGER NULL"),
+                    ("user_email", "TEXT NULL"),
+                    ("reporter_email", "TEXT NULL"),
+                    ("user_gmail", "TEXT NULL"),
+                    ("phash", "TEXT NULL"),
+                    ("authenticity_score", "REAL NULL"),
                     ("status", "TEXT DEFAULT 'AI_VERIFIED'"),
-                    ("landmark_name", "TEXT"),
-                    ("description", "TEXT"),
+                    ("landmark_name", "TEXT NULL"),
+                    ("description", "TEXT NULL"),
                     ("damage_type", "TEXT DEFAULT 'Pothole'"),
                     ("updated_at", "TEXT")
                 ]
-                for col_name, col_def in sqlite_cols:
+                for col_name, col_def in cols_sqlite:
                     try:
                         conn.execute(f"SELECT {col_name} FROM pothole_detections LIMIT 1")
                     except Exception:
@@ -577,20 +580,20 @@ def insert_detection(
                 cursor.execute("""
                     INSERT INTO pothole_detections 
                     (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, 
-                     risk_score, image_hash, user_id, user_email, reporter_email, phash, authenticity_score, landmark_name, description, damage_type, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     risk_score, image_hash, user_id, user_email, reporter_email, user_gmail, phash, authenticity_score, landmark_name, description, damage_type, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, 
-                      risk_score, img_hash, user_id, eff_email, eff_email, phash or None, authenticity_score, landmark_name, description, damage_type, status))
+                      risk_score, img_hash, user_id, eff_email, eff_email, eff_email, phash or None, authenticity_score, landmark_name, description, damage_type, status))
                 inserted_id = cursor.lastrowid
         else: # sqlite
             with conn:
                 cursor = conn.execute("""
                     INSERT INTO pothole_detections 
                     (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, 
-                     risk_score, image_hash, user_id, user_email, reporter_email, phash, authenticity_score, landmark_name, description, damage_type, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     risk_score, image_hash, user_id, user_email, reporter_email, user_gmail, phash, authenticity_score, landmark_name, description, damage_type, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, 
-                      risk_score, img_hash, user_id, eff_email, eff_email, phash or None, authenticity_score, landmark_name, description, damage_type, status))
+                      risk_score, img_hash, user_id, eff_email, eff_email, eff_email, phash or None, authenticity_score, landmark_name, description, damage_type, status))
                 inserted_id = cursor.lastrowid
     except Exception as e:
         return False, f"Database insertion error: {e}", None
