@@ -163,7 +163,7 @@ export default function App() {
       case 'detection':
         return {
           title: 'AI Hazard Perception & Computer Vision',
-          subtitle: 'Real-time pothole and road damage detection with EXIF GPS geotagging mapping'
+          subtitle: 'Real-time pothole and road damage detection with AI computer vision'
         };
       case 'my-reports':
         return {
@@ -172,7 +172,7 @@ export default function App() {
         };
       case 'public-feed':
         return {
-          title: 'Recent Geotagged Public Reports (Live Feed)',
+          title: 'Recent Public Incident Reports (Live Feed)',
           subtitle: 'Live city-wide telemetry feed of verified road hazard reports, severity distribution, and spatial analytics'
         };
       case 'authenticity':
@@ -290,31 +290,26 @@ export default function App() {
 
         {/* Public Citizen Content Area */}
         <main style={{ flex: 1, maxWidth: '1240px', margin: '0 auto', width: '100%', padding: '24px 20px' }}>
-          {activeTab === 'detection' && (
+          {activeTab === 'my-reports' ? (
+            <MyReportsView 
+              userRole={userRole} 
+              onNavigateToDetection={() => setActiveTab('detection')} 
+            />
+          ) : activeTab === 'public-feed' ? (
+            <PublicFeedHistoryView 
+              onNavigateToReport={() => setActiveTab('detection')} 
+            />
+          ) : activeTab === 'authenticity' ? (
+            <AuthenticityVerifierView 
+              onNavigateToDetection={(file) => setActiveTab('detection')} 
+            />
+          ) : (
             <AIDetectionView 
               userRole={userRole} 
               onNavigateToAuthenticity={() => setActiveTab('authenticity')}
               onNavigateToReports={() => setActiveTab('my-reports')}
             />
           )}
-          {activeTab === 'my-reports' && (
-            <MyReportsView 
-              userRole={userRole} 
-              onNavigateToDetection={() => setActiveTab('detection')} 
-            />
-          )}
-          {activeTab === 'public-feed' && (
-            <PublicFeedHistoryView 
-              onNavigateToReport={() => setActiveTab('detection')} 
-              onNavigateToMap={() => setActiveTab('digital-twin')} 
-            />
-          )}
-          {activeTab === 'authenticity' && (
-            <AuthenticityVerifierView 
-              onNavigateToDetection={(file) => setActiveTab('detection')} 
-            />
-          )}
-          {activeTab === 'digital-twin' && <DigitalTwinMapView />}
         </main>
 
         {showProfileModal && (

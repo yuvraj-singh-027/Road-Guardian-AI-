@@ -3,11 +3,13 @@ import {
   ClipboardList, Clock, CheckCircle2, AlertTriangle, ShieldCheck, 
   MapPin, Eye, Search, Filter, RefreshCw, ChevronRight, X, ArrowRight,
   User, Check, AlertCircle, Wrench, ShieldAlert, Cpu, Sparkles, Send,
-  PieChart as PieIcon, BarChart2
+  PieChart as PieIcon, BarChart2, History
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis } from 'recharts';
+import PublicFeedHistoryView from './PublicFeedHistoryView';
 
-export default function MyReportsView({ userRole, onNavigateToDetection }) {
+export default function MyReportsView({ userRole, onNavigateToDetection, initialSubTab = 'my-reports' }) {
+  const [subTab, setSubTab] = useState(initialSubTab);
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -23,7 +25,7 @@ export default function MyReportsView({ userRole, onNavigateToDetection }) {
   // Standard 8 Lifecycle Stages Definition
   const LIFECYCLE_STAGES = [
     { key: 'SUBMITTED', label: 'Report Submitted', desc: 'Citizen photographic upload & geotag' },
-    { key: 'AI_VERIFIED', label: 'AI Verification', desc: 'YOLO hazard & Authenticity check passed' },
+    { key: 'AI_VERIFIED', label: 'AI Verification', desc: 'AI hazard & Authenticity check passed' },
     { key: 'UNDER_REVIEW', label: 'Under Review', desc: 'Municipal authority triage & assessment' },
     { key: 'ASSIGNED', label: 'Assigned for Repair', desc: 'Dispatched to PWD / Road maintenance unit' },
     { key: 'IN_PROGRESS', label: 'Repair In Progress', desc: 'On-site asphalt patching & crew active' },
@@ -179,7 +181,60 @@ export default function MyReportsView({ userRole, onNavigateToDetection }) {
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
-      {/* Header Banner */}
+      {/* Merged View Sub-Navigation Tabs */}
+      <div style={{ display: 'flex', gap: '8px', background: '#18181b', padding: '4px', borderRadius: '12px', border: '1px solid #27272a', width: 'fit-content' }}>
+        <button
+          onClick={() => setSubTab('my-reports')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: 'none',
+            background: subTab === 'my-reports' ? 'rgba(0, 230, 180, 0.15)' : 'transparent',
+            color: subTab === 'my-reports' ? '#00E6B4' : '#a1a1aa',
+            fontWeight: subTab === 'my-reports' ? 700 : 500,
+            fontSize: '0.84rem',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <ClipboardList size={16} color={subTab === 'my-reports' ? '#00E6B4' : '#71717a'} />
+          <span>{userRole === 'admin' ? 'Citizen Complaint Registry' : 'My Reports & Tracking'}</span>
+        </button>
+        <button
+          onClick={() => setSubTab('public-feed')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: 'none',
+            background: subTab === 'public-feed' ? 'rgba(0, 230, 180, 0.15)' : 'transparent',
+            color: subTab === 'public-feed' ? '#00E6B4' : '#a1a1aa',
+            fontWeight: subTab === 'public-feed' ? 700 : 500,
+            fontSize: '0.84rem',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <History size={16} color={subTab === 'public-feed' ? '#00E6B4' : '#71717a'} />
+          <span>Incident History Feed (Live)</span>
+        </button>
+      </div>
+
+      {subTab === 'public-feed' ? (
+        <PublicFeedHistoryView 
+          onNavigateToReport={() => {
+            setSubTab('my-reports');
+            if (onNavigateToDetection) onNavigateToDetection();
+          }} 
+        />
+      ) : (
+        <React.Fragment>
+          {/* Header Banner */}
       <div className="glass-card" style={{ padding: '24px', borderLeft: '4px solid #38BDF8' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
           <div>
@@ -773,7 +828,9 @@ export default function MyReportsView({ userRole, onNavigateToDetection }) {
           </div>
         </div>
       )}
+    </React.Fragment>
+  )}
 
-    </div>
+</div>
   );
 }

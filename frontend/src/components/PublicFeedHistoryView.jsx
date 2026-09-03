@@ -87,7 +87,7 @@ export default function PublicFeedHistoryView({ onNavigateToReport, onNavigateTo
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <History size={22} color="#00E6B4" /> Recent Geotagged Public Reports (Live Feed)
+              <History size={22} color="#00E6B4" /> Recent Public Incident Reports (Live Feed)
             </h2>
             <span className="badge badge-healthy" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem' }}>
               <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981', display: 'inline-block' }} /> Live Telemetry

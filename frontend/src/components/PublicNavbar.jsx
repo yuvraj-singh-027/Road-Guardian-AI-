@@ -7,9 +7,7 @@ import {
 export default function PublicNavbar({ activeTab, setActiveTab, user, onSwitchPortal, onOpenProfile, onLogout }) {
   const navLinks = [
     { id: 'detection', label: 'Report Hazard & Scan', icon: Camera, badge: 'AI Vision' },
-    { id: 'my-reports', label: 'My Reports & Tracking', icon: ClipboardList, badge: 'Lifecycle' },
-    { id: 'public-feed', label: 'Incident History (Live Feed)', icon: History, badge: 'Live Feed' },
-    { id: 'digital-twin', label: 'Live City Map', icon: Map, badge: 'Spatial' },
+    { id: 'my-reports', label: 'Reports & Incident History', icon: ClipboardList, badge: 'Live Feed' },
   ];
 
   return (
@@ -50,7 +48,7 @@ export default function PublicNavbar({ activeTab, setActiveTab, user, onSwitchPo
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.3px', fontFamily: 'Space Grotesk, sans-serif' }}>
-                Road Guardian
+                Road Guardian AI
               </span>
               <span style={{
                 fontSize: '0.66rem',

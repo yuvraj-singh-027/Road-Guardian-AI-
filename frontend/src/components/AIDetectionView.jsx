@@ -414,10 +414,10 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
         <div className="glass-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ fontSize: '1.05rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Camera size={18} color="#00E6B4" /> AI Perception Scanner & Geotag Upload
+              <Camera size={18} color="#00E6B4" /> AI Perception Scanner & Image Upload
             </h3>
             <span style={{ fontSize: '0.72rem', background: '#18181b', color: '#00E6B4', padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(0,230,180,0.2)' }}>
-              PyTorch YOLOv8
+              AI Active
             </span>
           </div>
           
@@ -499,7 +499,7 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
                       or Drag & Drop image file here (JPG, PNG, WEBP)
                     </p>
                     <div style={{ marginTop: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '20px', background: '#18181b', border: '1px solid #27272a', fontSize: '0.72rem', color: '#00E6B4' }}>
-                      <Sparkles size={12} /> Auto-extracts EXIF GPS Geotags & Camera Metadata
+                      <Sparkles size={12} /> Auto-extracts Image EXIF & Camera Metadata
                     </div>
                   </div>
                 )}
@@ -860,7 +860,7 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
                     cursor: 'pointer'
                   }}
                 >
-                  🤖 YOLO Vision Detections
+                  🤖 AI Hazard Detections
                 </button>
 
                 {previewUrl && (
@@ -897,7 +897,7 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
                       cursor: 'pointer'
                     }}
                   >
-                    🔬 ELA Error Map
+                    🔬 Photo Error Analysis
                   </button>
                 )}
               </div>
@@ -926,7 +926,7 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
                   color: '#e4e4e7',
                   border: '1px solid rgba(255,255,255,0.1)'
                 }}>
-                  {activeImageView === 'yolo' ? 'YOLO Overlay' : activeImageView === 'ela' ? 'ELA Error Heatmap' : 'Raw Sensor Photo'}
+                  {activeImageView === 'yolo' ? 'AI Hazard Overlay' : activeImageView === 'ela' ? 'Analysis Map' : 'Original Photo'}
                 </div>
               </div>
 
@@ -949,14 +949,14 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
                     <MapPin size={14} color="#F59E0B" /> Location / Landmark:
                   </span>
                   <span style={{ fontWeight: 600, color: '#00E6B4', fontSize: '0.85rem' }}>
-                    {detectionResult.landmark_name || 'Geotagged Hazard'}
+                    {detectionResult.landmark_name || 'Detected Hazard'}
                   </span>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.78rem', color: '#71717a' }}>GPS Coordinates & Source:</span>
                   <span style={{ fontWeight: 600, color: '#fff', fontSize: '0.82rem' }}>
-                    {detectionResult.gps.latitude.toFixed(4)}° N, {detectionResult.gps.longitude.toFixed(4)}° E ({detectionResult.location_source || 'Geotag'})
+                    {detectionResult.gps.latitude.toFixed(4)}° N, {detectionResult.gps.longitude.toFixed(4)}° E ({detectionResult.location_source || 'Metadata'})
                   </span>
                 </div>
               </div>
@@ -980,61 +980,6 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
             </div>
           )}
         </div>
-      </div>
-
-
-      {/* Community Hazard Reports Feed */}
-      <div className="glass-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-          <h3 style={{ fontSize: '1.05rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <History size={16} color="#00E6B4" /> Recent Geotagged Public Reports (Live Feed)
-          </h3>
-          <span className="badge badge-degraded" style={{ fontSize: '0.72rem' }}>
-            Public GIS Telemetry Feed
-          </span>
-        </div>
-
-        {loadingHistory ? (
-          <div style={{ padding: '16px', textAlign: 'center', color: '#71717a', fontSize: '0.85rem' }}>Loading recent hazard feed...</div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-muted)', color: '#71717a', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                  <th style={{ padding: '10px 12px' }}>Landmark / Image</th>
-                  <th style={{ padding: '10px 12px' }}>Severity</th>
-                  <th style={{ padding: '10px 12px' }}>AI Confidence</th>
-                  <th style={{ padding: '10px 12px' }}>Risk Rating</th>
-                  <th style={{ padding: '10px 12px' }}>Timestamp</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentReports.map((item, idx) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                    <td style={{ padding: '10px 12px', color: '#fff', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <MapPin size={15} color="#00E6B4" /> {item.Landmark || item.Image}
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <span className={`badge ${getSeverityBadgeClass(item.Severity)}`}>
-                        {item.Severity}
-                      </span>
-                    </td>
-                    <td style={{ padding: '10px 12px', color: '#38BDF8', fontWeight: 600 }}>
-                      {Math.round((item.Confidence || 0.8) * 100)}%
-                    </td>
-                    <td style={{ padding: '10px 12px', color: '#F59E0B', fontWeight: 600 }}>
-                      {item.Risk_Score || 75.0} / 100
-                    </td>
-                    <td style={{ padding: '10px 12px', color: '#71717a', fontSize: '0.78rem' }}>
-                      <Clock size={12} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-                      {item.Time}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
     </div>
   );

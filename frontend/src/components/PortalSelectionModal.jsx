@@ -77,11 +77,11 @@ export default function PortalSelectionModal({ onSelectRole }) {
             </div>
             <h2>Public Citizen Portal</h2>
             <p>
-              Report road hazards, stream camera feeds for pothole AI scanning, and view interactive public road safety maps.
+              Report road hazards, stream camera feeds for pothole AI scanning, and track repair lifecycle status.
             </p>
             <ul className="portal-features">
               <li><CheckCircle2 size={14} color="#00E6B4" /> Pothole Camera AI Perception</li>
-              <li><CheckCircle2 size={14} color="#00E6B4" /> Public Road GIS Telemetry Map</li>
+              <li><CheckCircle2 size={14} color="#00E6B4" /> Public Incident Report Feed</li>
               <li><CheckCircle2 size={14} color="#00E6B4" /> Instant Hazard Reporting</li>
             </ul>
             <button className="btn-primary portal-btn" style={{ width: '100%', marginTop: '14px' }}>

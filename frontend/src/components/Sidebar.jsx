@@ -5,12 +5,11 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
   const allNavItems = [
     { 
       id: 'my-reports', 
-      label: userRole === 'admin' ? 'Citizen Reports Registry' : 'My Reports & Tracking', 
+      label: userRole === 'admin' ? 'Citizen Reports Registry' : 'Reports & Incident History', 
       icon: ClipboardList, 
       publicAccess: true, 
-      badge: userRole === 'admin' ? 'Triage' : 'Lifecycle' 
+      badge: userRole === 'admin' ? 'Triage' : 'Live Feed' 
     },
-    { id: 'public-feed', label: 'Incident History Feed', icon: History, publicAccess: true, badge: 'Live Feed' },
     { id: 'digital-twin', label: 'Digital Twin City Map', icon: Map, publicAccess: true, badge: 'Spatial' },
     { id: 'n8n-automation', label: 'n8n Automation Hub', icon: Zap, publicAccess: true, badge: 'Workflow' },
     { id: 'traffic-reroute', label: 'Traffic Simulator', icon: Cpu, publicAccess: false, badge: 'Layer 4' },
@@ -22,7 +21,7 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
 
   const navItems = allNavItems.filter(item => {
     if (userRole === 'public') {
-      return item.id === 'detection' || item.id === 'my-reports' || item.id === 'public-feed' || item.id === 'digital-twin' || item.id === 'n8n-automation';
+      return item.id === 'detection' || item.id === 'my-reports' || item.id === 'n8n-automation';
     } else {
       return item.id !== 'detection';
     }
@@ -54,7 +53,7 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
                 <Activity size={22} color="#00E6B4" />
               </div>
               <div>
-                <div className="brand-title">Road Guardian</div>
+                <div className="brand-title">Road Guardian AI</div>
                 <div className="brand-subtitle">AI Twin Intelligence</div>
               </div>
             </div>
