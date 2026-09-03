@@ -1,34 +1,35 @@
 import React from 'react';
 import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, RefreshCw, Lock, Users, User, ChevronRight, Layers, ShieldCheck, ClipboardList, History, Zap, X } from 'lucide-react';
 
-export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPortal, isMobileOpen, setIsMobileOpen }) {
-  const allNavItems = [
-    { 
-      id: 'my-reports', 
-      label: userRole === 'admin' ? 'Citizen Reports Registry' : 'Reports & Incident History', 
-      icon: ClipboardList, 
-      publicAccess: true, 
-      badge: userRole === 'admin' ? 'Triage' : 'Live Feed' 
-    },
-    { id: 'digital-twin', label: 'Digital Twin City Map', icon: Map, publicAccess: true, badge: 'Spatial' },
-    { id: 'n8n-automation', label: 'n8n Automation Hub', icon: Zap, publicAccess: true, badge: 'Workflow' },
-    { id: 'traffic-reroute', label: 'Traffic Simulator', icon: Cpu, publicAccess: false, badge: 'Layer 4' },
-    { id: 'risk-calculator', label: 'Risk Engine Evaluator', icon: ShieldAlert, publicAccess: false, badge: 'Layer 2' },
-    { id: 'municipal-report', label: 'Audit PDF Generator', icon: FileText, publicAccess: false, badge: 'Export' },
-    { id: 'authenticity', label: 'Authenticity Verifier', icon: ShieldCheck, publicAccess: true, badge: 'Forensics' },
-    { id: 'detection', label: 'AI Hazard Perception', icon: Camera, publicAccess: true, badge: 'AI Vision' },
-  ];
+export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPortal, onOpenProfile, isMobileOpen, setIsMobileOpen }) {
+  let navItems = [];
+  if (userRole === 'public') {
+    navItems = [
+      { id: 'detection', label: 'Report Hazard', icon: Camera, badge: 'AI Scanner' },
+      { id: 'my-reports', label: 'Report & Incident', icon: ClipboardList, badge: 'Live Feed' },
+      { id: 'switch-authority', label: 'Authority Portal', icon: ShieldAlert, badge: 'Admin' },
+      { id: 'account', label: 'Account', icon: User, badge: 'Profile' },
+    ];
+  } else {
+    navItems = [
+      { id: 'digital-twin', label: 'Digital Twin City Map', icon: Map, badge: 'Spatial' },
+      { id: 'my-reports', label: 'Citizen Reports Registry', icon: ClipboardList, badge: 'Triage' },
+      { id: 'n8n-automation', label: 'n8n Automation Hub', icon: Zap, badge: 'Workflow' },
+      { id: 'traffic-reroute', label: 'Traffic Simulator', icon: Cpu, badge: 'Layer 4' },
+      { id: 'risk-calculator', label: 'Risk Engine Evaluator', icon: ShieldAlert, badge: 'Layer 2' },
+      { id: 'municipal-report', label: 'Audit PDF Generator', icon: FileText, badge: 'Export' },
+      { id: 'authenticity', label: 'Authenticity Verifier', icon: ShieldCheck, badge: 'Forensics' },
+    ];
+  }
 
-  const navItems = allNavItems.filter(item => {
-    if (userRole === 'public') {
-      return item.id === 'detection' || item.id === 'my-reports' || item.id === 'n8n-automation';
+  const handleNavClick = (item) => {
+    if (item.id === 'switch-authority') {
+      if (onSwitchPortal) onSwitchPortal();
+    } else if (item.id === 'account') {
+      if (onOpenProfile) onOpenProfile();
     } else {
-      return item.id !== 'detection';
+      setActiveTab(item.id);
     }
-  });
-
-  const handleNavClick = (tabId) => {
-    setActiveTab(tabId);
     if (setIsMobileOpen) {
       setIsMobileOpen(false);
     }
@@ -107,7 +108,7 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
                 <li
                   key={item.id}
                   className={`nav-item ${isActive ? 'active' : ''}`}
-                  onClick={() => handleNavClick(item.id)}
+                  onClick={() => handleNavClick(item)}
                 >
                   <Icon size={18} color={isActive ? '#00E6B4' : '#71717a'} />
                   <span style={{ flex: 1 }}>{item.label}</span>

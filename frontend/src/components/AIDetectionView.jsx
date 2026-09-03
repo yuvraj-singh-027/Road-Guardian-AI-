@@ -720,7 +720,7 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
         {/* Results Panel */}
         <div className="glass-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '1.05rem', color: '#fff' }}>YOLO Perception Output</h3>
+            <h3 style={{ fontSize: '1.05rem', color: '#fff' }}>AI Perception Output</h3>
             {detectionResult && (
               <span className={`badge ${getSeverityBadgeClass(detectionResult.highest_severity)}`}>
                 {detectionResult.highest_severity} Severity

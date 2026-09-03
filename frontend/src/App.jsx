@@ -274,43 +274,56 @@ export default function App() {
     );
   }
 
-  // --- PUBLIC CITIZEN PORTAL (Clean, Simple UI with Top Navbar) ---
+  // --- PUBLIC CITIZEN PORTAL (Clean UI with Sidebar & Header) ---
   if (userRole === 'public') {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-background)' }}>
-        {/* Clean Citizen Top Navbar */}
-        <PublicNavbar 
+      <div className="app-container">
+        <Sidebar 
           activeTab={activeTab} 
           setActiveTab={setActiveTab} 
-          user={user} 
-          onSwitchPortal={handleSwitchPortal} 
-          onOpenProfile={() => setShowProfileModal(true)} 
-          onLogout={handleLogout} 
+          userRole={userRole}
+          onSwitchPortal={handleSwitchPortal}
+          onOpenProfile={() => setShowProfileModal(true)}
+          isMobileOpen={isMobileOpen}
+          setIsMobileOpen={setIsMobileOpen}
         />
 
-        {/* Public Citizen Content Area */}
-        <main style={{ flex: 1, maxWidth: '1240px', margin: '0 auto', width: '100%', padding: '24px 20px' }}>
-          {activeTab === 'my-reports' ? (
-            <MyReportsView 
-              userRole={userRole} 
-              onNavigateToDetection={() => setActiveTab('detection')} 
-            />
-          ) : activeTab === 'public-feed' ? (
-            <PublicFeedHistoryView 
-              onNavigateToReport={() => setActiveTab('detection')} 
-            />
-          ) : activeTab === 'authenticity' ? (
-            <AuthenticityVerifierView 
-              onNavigateToDetection={(file) => setActiveTab('detection')} 
-            />
-          ) : (
-            <AIDetectionView 
-              userRole={userRole} 
-              onNavigateToAuthenticity={() => setActiveTab('authenticity')}
-              onNavigateToReports={() => setActiveTab('my-reports')}
-            />
-          )}
-        </main>
+        <div className="main-content">
+          <Header 
+            title={headerInfo.title} 
+            subtitle={headerInfo.subtitle} 
+            summaryStats={summaryStats} 
+            userRole={userRole}
+            user={user}
+            onSwitchPortal={handleSwitchPortal}
+            onOpenProfile={() => setShowProfileModal(true)}
+            isMobileOpen={isMobileOpen}
+            setIsMobileOpen={setIsMobileOpen}
+          />
+
+          <main style={{ flex: 1, maxWidth: '1240px', margin: '0 auto', width: '100%', padding: '24px 20px' }}>
+            {activeTab === 'my-reports' ? (
+              <MyReportsView 
+                userRole={userRole} 
+                onNavigateToDetection={() => setActiveTab('detection')} 
+              />
+            ) : activeTab === 'public-feed' ? (
+              <PublicFeedHistoryView 
+                onNavigateToReport={() => setActiveTab('detection')} 
+              />
+            ) : activeTab === 'authenticity' ? (
+              <AuthenticityVerifierView 
+                onNavigateToDetection={(file) => setActiveTab('detection')} 
+              />
+            ) : (
+              <AIDetectionView 
+                userRole={userRole} 
+                onNavigateToAuthenticity={() => setActiveTab('authenticity')}
+                onNavigateToReports={() => setActiveTab('my-reports')}
+              />
+            )}
+          </main>
+        </div>
 
         {showProfileModal && (
           <UserProfileModal 
