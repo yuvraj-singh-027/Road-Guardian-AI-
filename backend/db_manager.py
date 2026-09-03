@@ -173,6 +173,7 @@ def init_db():
                     risk_score DOUBLE PRECISION,
                     image_hash VARCHAR(64),
                     user_id INT NULL,
+                    user_email VARCHAR(255) NULL,
                     reporter_email VARCHAR(255) NULL,
                     status VARCHAR(50) DEFAULT 'AI_VERIFIED',
                     landmark_name VARCHAR(255) NULL,
@@ -208,11 +209,10 @@ def init_db():
                     changed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 );
                 """)
-                # Add reporter_email column to existing Postgres tables if it doesn't exist yet
+                # Add user_email and reporter_email column to existing Postgres tables if they don't exist yet
                 try:
-                    cursor.execute(
-                        "ALTER TABLE pothole_detections ADD COLUMN IF NOT EXISTS reporter_email VARCHAR(255) NULL;"
-                    )
+                    cursor.execute("ALTER TABLE pothole_detections ADD COLUMN IF NOT EXISTS user_email VARCHAR(255) NULL;")
+                    cursor.execute("ALTER TABLE pothole_detections ADD COLUMN IF NOT EXISTS reporter_email VARCHAR(255) NULL;")
                 except Exception:
                     pass  # Column already exists or unsupported (no-op)
         elif db_type == "mysql":
@@ -278,6 +278,7 @@ def init_db():
                 # Try adding dynamic columns if missing on existing MySQL table
                 cols_to_add = [
                     ("user_id", "INT NULL"),
+                    ("user_email", "VARCHAR(255) NULL"),
                     ("reporter_email", "VARCHAR(255) NULL"),
                     ("phash", "VARCHAR(64) NULL"),
                     ("authenticity_score", "FLOAT NULL"),
@@ -365,6 +366,7 @@ def init_db():
                 # Try adding dynamic columns if missing on existing SQLite table
                 sqlite_cols = [
                     ("user_id", "INTEGER"),
+                    ("user_email", "TEXT"),
                     ("reporter_email", "TEXT"),
                     ("phash", "TEXT"),
                     ("authenticity_score", "REAL"),
@@ -489,6 +491,7 @@ def insert_detection(
     image_bytes_or_path: Any = None,
     skip_dedup: bool = False,
     user_id: Optional[int] = None,
+    user_email: Optional[str] = None,
     reporter_email: Optional[str] = None,
     phash: str = "",
     authenticity_score: Optional[float] = None,
@@ -504,6 +507,8 @@ def insert_detection(
     """
     init_db()
     
+    eff_email = user_email or reporter_email or None
+
     # Parse numeric coordinates
     try:
         lat_num = float(latitude)
@@ -543,20 +548,20 @@ def insert_detection(
                 cursor.execute("""
                     INSERT INTO pothole_detections 
                     (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, 
-                     risk_score, image_hash, user_id, reporter_email, phash, authenticity_score, landmark_name, description, damage_type, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     risk_score, image_hash, user_id, user_email, reporter_email, phash, authenticity_score, landmark_name, description, damage_type, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, 
-                      risk_score, img_hash, user_id, reporter_email or None, phash or None, authenticity_score, landmark_name, description, damage_type, status))
+                      risk_score, img_hash, user_id, eff_email, eff_email, phash or None, authenticity_score, landmark_name, description, damage_type, status))
                 inserted_id = cursor.lastrowid
         else: # sqlite
             with conn:
                 cursor = conn.execute("""
                     INSERT INTO pothole_detections 
                     (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, 
-                     risk_score, image_hash, user_id, reporter_email, phash, authenticity_score, landmark_name, description, damage_type, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     risk_score, image_hash, user_id, user_email, reporter_email, phash, authenticity_score, landmark_name, description, damage_type, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, 
-                      risk_score, img_hash, user_id, reporter_email or None, phash or None, authenticity_score, landmark_name, description, damage_type, status))
+                      risk_score, img_hash, user_id, eff_email, eff_email, phash or None, authenticity_score, landmark_name, description, damage_type, status))
                 inserted_id = cursor.lastrowid
     except Exception as e:
         return False, f"Database insertion error: {e}", None
@@ -710,7 +715,8 @@ def get_user_reports(
                 "report_id": f"RG-{1000 + rec_id}",
                 "user_id": r.get("user_id"),
                 "user_name": r.get("user_name") or "Citizen Contributor",
-                "user_email": r.get("user_email") or "",
+                "user_email": r.get("user_email") or r.get("reporter_email") or "",
+                "reporter_email": r.get("user_email") or r.get("reporter_email") or "",
                 "image_name": r.get("image_name"),
                 "damage_type": r.get("damage_type") or "Pothole Hazard",
                 "severity": r.get("severity") or "Medium",
@@ -841,7 +847,8 @@ def get_report_by_id_with_history(
             "report_id": f"RG-{1000 + row.get('id')}",
             "user_id": row.get("user_id"),
             "user_name": row.get("user_name") or "Citizen Contributor",
-            "user_email": row.get("user_email") or "",
+            "user_email": row.get("user_email") or row.get("reporter_email") or "",
+            "reporter_email": row.get("user_email") or row.get("reporter_email") or "",
             "image_name": row.get("image_name"),
             "damage_type": row.get("damage_type") or "Pothole Hazard",
             "severity": row.get("severity") or "Medium",

@@ -901,6 +901,7 @@ async def detect_image(
                 confidence=max_conf,
                 time_val=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 user_id=current_user.get("id") if (current_user and isinstance(current_user, dict)) else None,
+                user_email=resolved_email,
                 reporter_email=resolved_email,
                 phash=current_phash,
                 authenticity_score=auth_score_val,
