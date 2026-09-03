@@ -78,7 +78,7 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
                 {userRole === 'admin' ? <ShieldAlert size={16} color="#F59E0B" /> : <Users size={16} color="#00E6B4" />}
                 <div>
                   <div style={{ fontSize: '0.8rem', fontWeight: 600, color: userRole === 'admin' ? '#F59E0B' : '#00E6B4' }}>
-                    {userRole === 'admin' ? 'Authority Admin' : 'Public Citizen'}
+                    {userRole === 'admin' ? 'Authority Admin' : 'Citizen'}
                   </div>
                   <div style={{ fontSize: '0.7rem', color: '#71717a' }}>
                     {userRole === 'admin' ? 'Full Audit Access' : 'Public Telemetry'}

@@ -21,7 +21,7 @@ export default function Header({ title, subtitle, summaryStats, userRole, user, 
             <h1 className="page-title">{title}</h1>
             <div className={`role-pill ${userRole === 'admin' ? 'role-pill-admin' : 'role-pill-public'}`}>
               {userRole === 'admin' ? <ShieldAlert size={13} /> : <Users size={13} />}
-              <span>{userRole === 'admin' ? 'Authority Admin' : 'Public Citizen'}</span>
+              <span>{userRole === 'admin' ? 'Authority Admin' : 'Citizen'}</span>
             </div>
           </div>
           <p className="page-desc">{subtitle}</p>

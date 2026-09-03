@@ -111,7 +111,7 @@ export default function UserProfileModal({ user, onClose, onLogout, onUpgradeSuc
             <span style={{ color: '#71717a' }}>Role Category</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: user.role === 'admin' ? '#F59E0B' : '#00E6B4', fontWeight: 600 }}>
               {user.role === 'admin' ? <ShieldAlert size={14} /> : <Users size={14} />}
-              {user.role === 'admin' ? 'Authority Admin' : 'Public Citizen'}
+              {user.role === 'admin' ? 'Authority Admin' : 'Citizen'}
             </span>
           </div>
 

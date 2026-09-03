@@ -14,6 +14,7 @@ import N8nAutomationView from './components/N8nAutomationView';
 import PublicNavbar from './components/PublicNavbar';
 import UserProfileModal from './components/UserProfileModal';
 import AuthPortal from './components/AuthPortal';
+import CitizenGuideWidget from './components/CitizenGuideWidget';
 import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, Lock, KeyRound, ArrowUpRight, Loader } from 'lucide-react';
 
 // --- GLOBAL FETCH TOKEN INTERCEPTOR ---
@@ -162,8 +163,8 @@ export default function App() {
     switch (activeTab) {
       case 'detection':
         return {
-          title: 'AI Hazard Perception & Computer Vision',
-          subtitle: 'Real-time pothole and road damage detection with AI computer vision'
+          title: 'AI Hazard Perception',
+          subtitle: 'Real-time road damage AI scanner'
         };
       case 'my-reports':
         return {
@@ -336,6 +337,8 @@ export default function App() {
             }}
           />
         )}
+
+        <CitizenGuideWidget />
       </div>
     );
   }
@@ -462,6 +465,8 @@ export default function App() {
           }}
         />
       )}
+
+      <CitizenGuideWidget />
     </div>
   );
 }
