@@ -52,10 +52,13 @@ def trigger_n8n_event(event_type: str, payload: Dict[str, Any], webhook_url: Opt
         return
 
     def _async_post():
+        email_val = payload.get("reporter_email") or payload.get("email") or payload.get("user_email") or None
         event_body = {
             "system": "Road Guardian AI Digital Twin",
             "event": event_type,
             "timestamp": datetime.datetime.now().isoformat(),
+            "email": email_val,
+            "reporter_email": email_val,
             "payload": payload
         }
         headers = _get_headers()

@@ -931,6 +931,8 @@ async def detect_image(
             "risk_score": risk_info.get("final_score") if isinstance(risk_info, dict) else None,
             "gps": {"latitude": lat, "longitude": lon},
             "reporter_email": resolved_email,
+            "email": resolved_email,
+            "user_email": resolved_email,
             "reporter_name": current_user.get("name") if (current_user and isinstance(current_user, dict)) else "Anonymous Citizen",
             "status": "AI_VERIFIED"
         })
@@ -1278,21 +1280,29 @@ def update_report_status_endpoint(
     if not success:
         raise HTTPException(status_code=400, detail=msg)
 
-    # Trigger n8n webhook automation event for status change
-    trigger_n8n_event("REPORT_STATUS_CHANGED", {
-        "report_id": f"RG-{1000 + report_id}",
-        "new_status": req.status,
-        "status_label": req.status_label,
-        "changed_by": current_user.get("name") or "Municipal Authority",
-        "message": req.message
-    })
-
     # Return refreshed report with updated timeline
     updated_report, _ = get_report_by_id_with_history(
         report_id=report_id,
         current_user_id=current_user["id"],
         is_admin=True
     )
+
+    # Resolve target recipient email from report
+    recipient_email = None
+    if updated_report:
+        recipient_email = updated_report.get("user_email") or updated_report.get("reporter_email") or None
+
+    # Trigger n8n webhook automation event for status change
+    trigger_n8n_event("REPORT_STATUS_CHANGED", {
+        "report_id": f"RG-{1000 + report_id}",
+        "new_status": req.status,
+        "status_label": req.status_label,
+        "changed_by": current_user.get("name") or "Municipal Authority",
+        "message": req.message,
+        "reporter_email": recipient_email,
+        "email": recipient_email,
+        "user_email": recipient_email
+    })
     return {
         "success": True,
         "message": msg,
@@ -1331,6 +1341,8 @@ class N8nSubmitReportRequest(BaseModel):
     target_department: Optional[str] = "Municipal Public Works Department"
     priority: Optional[str] = "High Priority"
     officer_notes: Optional[str] = "Critical pothole requires immediate inspection."
+    reporter_email: Optional[str] = "citizen@roadguardian.gov"
+    email: Optional[str] = None
     detections_summary: Optional[Dict[str, Any]] = None
     critical_segments: Optional[List[Dict[str, Any]]] = None
 
@@ -1339,12 +1351,16 @@ def n8n_submit_report(req: N8nSubmitReportRequest):
     """
     Step 16 guide submission endpoint to post test report payload from FastAPI to n8n.
     """
+    eff_email = req.email or req.reporter_email or "citizen@roadguardian.gov"
     submission_id = f"RG-{int(time.time())}"
     payload = {
         "submission_id": submission_id,
         "target_department": req.target_department,
         "priority": req.priority,
         "officer_notes": req.officer_notes,
+        "reporter_email": eff_email,
+        "email": eff_email,
+        "user_email": eff_email,
         "detections_summary": req.detections_summary or {
             "total_scanned": 1,
             "total_potholes": 1,
