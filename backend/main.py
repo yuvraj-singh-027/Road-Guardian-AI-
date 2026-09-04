@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 from PIL import Image, ExifTags
 import numpy as np
+import pandas as pd
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -424,6 +425,19 @@ async def report_hazard_endpoint(
     lon = longitude if longitude is not None else 77.2090
     resolved_addr = address or reverse_geocode_coords(lat, lon)
     
+    saved_filename = image_name or "report_manual.jpg"
+    if image:
+        try:
+            img_contents = await image.read()
+            potholes_dir = BASE_DIR / "potholes"
+            potholes_dir.mkdir(exist_ok=True)
+            saved_filename = f"report_{int(time.time())}_{image.filename or 'upload.jpg'}"
+            out_path = potholes_dir / saved_filename
+            with open(out_path, "wb") as f:
+                f.write(img_contents)
+        except Exception as e:
+            print(f"[Manual Report Image Save Error]: {e}")
+            
     # Save the manual hazard report to the database
     try:
         try:
@@ -431,12 +445,13 @@ async def report_hazard_endpoint(
         except ImportError:
             from db_manager import insert_detection
         insert_detection(
-            image_name=image_name or "report_manual.jpg",
+            image_name=saved_filename,
             latitude=str(lat),
             longitude=str(lon),
             severity=severity or "High",
             confidence=confidence or 0.88,
-            user_id=current_user["id"]
+            user_id=current_user["id"],
+            landmark_name=resolved_addr
         )
     except Exception as e:
         print(f"[Manual Report DB Sync Error]: {e}")
@@ -597,13 +612,13 @@ async def detect_image(
 ):
     contents = await file.read()
 
-    # Dynamic User Email: Always prioritize logged-in user or the actual submitted form email
+    # Dynamic User Email: Always prioritize the explicitly submitted form email first, then current logged-in user
     submitted_email = reporter_email or user_email or user_gmail or email
     resolved_email: Optional[str] = None
-    if current_user and isinstance(current_user, dict) and current_user.get("email"):
-        resolved_email = str(current_user.get("email")).strip()
-    elif submitted_email and str(submitted_email).strip():
+    if submitted_email and str(submitted_email).strip():
         resolved_email = str(submitted_email).strip()
+    elif current_user and isinstance(current_user, dict) and current_user.get("email"):
+        resolved_email = str(current_user.get("email")).strip()
 
     # Enforce mandatory email address for all hazard submissions
     if not resolved_email or not resolved_email.strip() or "@" not in resolved_email or "." not in resolved_email:
@@ -930,7 +945,7 @@ async def detect_image(
             "reporter_email": resolved_email,
             "email": resolved_email,
             "user_email": resolved_email,
-            "reporter_name": current_user.get("name") if (current_user and isinstance(current_user, dict)) else "Anonymous Citizen",
+            "reporter_name": (current_user.get("name") if (current_user and isinstance(current_user, dict) and not submitted_email) else (resolved_email.split('@')[0] if resolved_email else "Citizen Reporter")),
             "status": "AI_VERIFIED"
         })
 
@@ -1443,16 +1458,23 @@ def n8n_submit_report(req: N8nSubmitReportRequest):
     }
 
 
-@app.get("/api/images/{filename}")
-@app.get("/potholes/{filename}")
+@app.get("/potholes/{filename:path}")
+@app.get("/api/images/{filename:path}")
+@app.get("/api/potholes/{filename:path}")
 def serve_hazard_image(filename: str):
     """
     Serves stored road damage photographs securely.
     """
+    clean_name = os.path.basename(filename)
     potholes_dir = BASE_DIR / "potholes"
-    file_path = potholes_dir / filename
+    file_path = potholes_dir / clean_name
     if file_path.exists() and file_path.is_file():
         return FileResponse(file_path)
+    root_potholes_dir = BASE_DIR.parent / "potholes"
+    if root_potholes_dir.exists():
+        root_file = root_potholes_dir / clean_name
+        if root_file.exists() and root_file.is_file():
+            return FileResponse(root_file)
     raise HTTPException(status_code=404, detail="Requested image file was not found on server.")
 
 
@@ -1475,17 +1497,26 @@ def clear_db_compat(req: Optional[ClearDBRequest] = None, request: Request = Non
         return {"success": True, "message": msg}
     raise HTTPException(status_code=500, detail=msg)
 
+# Ensure potholes directory exists
+potholes_dir_path = BASE_DIR / "potholes"
+potholes_dir_path.mkdir(exist_ok=True)
+
+from fastapi.staticfiles import StaticFiles
+app.mount("/potholes", StaticFiles(directory=str(potholes_dir_path)), name="potholes")
+app.mount("/api/images", StaticFiles(directory=str(potholes_dir_path)), name="api_images")
+
 # Mount built React frontend (frontend/dist) or fallback static HTML
 frontend_dist_path = BASE_DIR.parent / "frontend" / "dist"
 static_path = BASE_DIR / "static"
 
 @app.exception_handler(404)
-async def custom_404_handler(request, exc):
+async def custom_404_handler(request: Request, exc):
     """
     Catch-all SPA 404 handler for client-side React pushState routing on Render.
     """
-    if request.url.path.startswith("/api/"):
-        return JSONResponse(status_code=404, content={"detail": "API endpoint not found"})
+    path = request.url.path
+    if path.startswith("/api/") or path.startswith("/potholes/"):
+        return JSONResponse(status_code=404, content={"detail": f"Resource '{path}' not found"})
     index_file = frontend_dist_path / "index.html"
     if index_file.exists():
         return FileResponse(index_file)
@@ -1495,10 +1526,8 @@ async def custom_404_handler(request, exc):
     return JSONResponse(status_code=404, content={"detail": "Not Found"})
 
 if frontend_dist_path.exists():
-    from fastapi.staticfiles import StaticFiles
     app.mount("/", StaticFiles(directory=str(frontend_dist_path), html=True), name="frontend_dist")
 elif static_path.exists():
-    from fastapi.staticfiles import StaticFiles
     app.mount("/", StaticFiles(directory=str(static_path), html=True), name="static")
 
 if __name__ == "__main__":

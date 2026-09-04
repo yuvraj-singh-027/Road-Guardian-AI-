@@ -538,12 +538,15 @@ export default function MyReportsView({ userRole, onNavigateToDetection, initial
                   {report.image_name && (
                     <div style={{ width: '100%', height: '140px', borderRadius: '8px', overflow: 'hidden', marginBottom: '12px', position: 'relative', border: '1px solid #27272a', background: '#09090b' }}>
                       <img 
-                        src={report.image_name?.startsWith('http') ? report.image_name : `/potholes/${report.image_name}`} 
+                        src={
+                          report.image_name.startsWith('http') || report.image_name.startsWith('data:')
+                            ? report.image_name
+                            : `/potholes/${report.image_name.replace(/^\/?(potholes|api\/images)\//, '')}`
+                        } 
                         alt="Attached Road Damage Photograph"
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=600&auto=format&fit=crop&q=60';
+                          e.target.style.opacity = '0.5';
                         }}
                       />
                       <div style={{ position: 'absolute', bottom: '6px', right: '6px', background: 'rgba(9, 9, 11, 0.85)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem', color: '#a1a1aa', border: '1px solid #27272a' }}>
@@ -718,12 +721,15 @@ export default function MyReportsView({ userRole, onNavigateToDetection, initial
                 </div>
                 <div style={{ width: '100%', height: '240px', background: '#09090b', overflow: 'hidden' }}>
                   <img 
-                    src={selectedReport.image_name?.startsWith('http') ? selectedReport.image_name : `/potholes/${selectedReport.image_name}`}
+                    src={
+                      selectedReport.image_name.startsWith('http') || selectedReport.image_name.startsWith('data:')
+                        ? selectedReport.image_name
+                        : `/potholes/${selectedReport.image_name.replace(/^\/?(potholes|api\/images)\//, '')}`
+                    }
                     alt="Attached Road Damage Evidence"
                     style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                     onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=600&auto=format&fit=crop&q=60';
+                      e.target.style.opacity = '0.5';
                     }}
                   />
                 </div>
