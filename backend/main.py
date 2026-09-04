@@ -489,6 +489,10 @@ def get_dashboard_summary(current_user: dict):
             try:
                 now = datetime.datetime.now()
                 df['dt'] = pd.to_datetime(df['Time'], errors='coerce')
+                try:
+                    df['dt'] = df['dt'].dt.tz_localize(None)
+                except Exception:
+                    pass
                 seven_days_ago = now - datetime.timedelta(days=7)
                 fourteen_days_ago = now - datetime.timedelta(days=14)
 
@@ -916,7 +920,10 @@ async def detect_image(
             )
             print(f"[DB AUTO-INSERT LOG]: {msg}")
 
-            if authenticity_info:
+            db_saved = bool(success)
+            db_insert_msg = msg or ("Stored successfully" if db_saved else "Database save suppressed.")
+
+            if db_saved and authenticity_info:
                 try:
                     log_authenticity_audit(
                         image_name=out_filename,
@@ -929,25 +936,31 @@ async def detect_image(
                     )
                 except Exception as audit_err:
                     print(f"[DB AUTHENTICITY AUDIT LOG ERROR]: {audit_err}")
-        except Exception as dberr:
-            print(f"[DB AUTO-INSERT ERROR]: {dberr}")
 
-        # Trigger n8n webhook automation event
-        trigger_n8n_event("HAZARD_DETECTED", {
-            "report_id": f"RG-{1000 + logged_report_id}" if logged_report_id else "RG-PENDING",
-            "filename": file.filename,
-            "landmark_name": resolved_landmark,
-            "severity": highest_severity,
-            "pothole_count": pothole_count,
-            "max_confidence": round(max_conf, 3),
-            "risk_score": risk_info.get("final_score") if isinstance(risk_info, dict) else None,
-            "gps": {"latitude": lat, "longitude": lon},
-            "reporter_email": resolved_email,
-            "email": resolved_email,
-            "user_email": resolved_email,
-            "reporter_name": (current_user.get("name") if (current_user and isinstance(current_user, dict) and not submitted_email) else (resolved_email.split('@')[0] if resolved_email else "Citizen Reporter")),
-            "status": "AI_VERIFIED"
-        })
+            # Only trigger n8n email notification when DB insert actually succeeded
+            if db_saved:
+                eff_id = logged_report_id if (logged_report_id is not None and logged_report_id > 0) else 1
+                trigger_n8n_event("HAZARD_DETECTED", {
+                    "report_id": f"RG-{1000 + eff_id}",
+                    "filename": file.filename,
+                    "landmark_name": resolved_landmark,
+                    "severity": highest_severity,
+                    "pothole_count": pothole_count,
+                    "max_confidence": round(max_conf, 3),
+                    "risk_score": risk_info.get("final_score") if isinstance(risk_info, dict) else None,
+                    "gps": {"latitude": lat, "longitude": lon},
+                    "reporter_email": resolved_email,
+                    "email": resolved_email,
+                    "user_email": resolved_email,
+                    "reporter_name": (current_user.get("name") if (current_user and isinstance(current_user, dict) and not submitted_email) else (resolved_email.split('@')[0] if resolved_email else "Citizen Reporter")),
+                    "status": "AI_VERIFIED"
+                })
+            else:
+                print(f"[n8n Dispatcher] Suppressed — DB rejected or insert failed ({db_insert_msg}), no notification sent.")
+        except Exception as db_ex:
+            print(f"[DB INSERT EXCEPTION]: {db_ex}")
+            db_saved = False
+            db_insert_msg = str(db_ex)
 
     # Decision message
     final_result_message = "Pothole detected" if pothole_count > 0 else "No pothole detected"
@@ -961,6 +974,7 @@ async def detect_image(
     for raw_cls, raw_conf in raw_detections_logged:
         print(f"  - Class detected: {raw_cls} | Confidence score: {raw_conf:.3f}")
     print(f"Number of valid detections: {pothole_count}")
+    print(f"Database Saved: {db_saved} (Report ID: {logged_report_id})")
     print(f"Final decision: {final_result_message}")
     print("="*45 + "\n")
 
@@ -978,9 +992,11 @@ async def detect_image(
         "is_fake": is_fake,
         "rejection_reason": rejection_reason,
         "annotated_image_b64": f"data:image/jpeg;base64,{b64_str}",
-        "report_id": f"RG-{1000 + logged_report_id}" if logged_report_id else "RG-PENDING",
-        "db_id": logged_report_id,
-        "status": "AI_VERIFIED",
+        "db_saved": db_saved,
+        "db_message": db_insert_msg,
+        "report_id": f"RG-{1000 + (logged_report_id or 1)}" if db_saved else None,
+        "db_id": logged_report_id if db_saved else None,
+        "status": "AI_VERIFIED" if db_saved else "UNSAVED_DETECTION",
         "message": final_result_message
     }
 
@@ -1415,26 +1431,46 @@ class N8nSubmitReportRequest(BaseModel):
     target_department: Optional[str] = "Municipal Public Works Department"
     priority: Optional[str] = "High Priority"
     officer_notes: Optional[str] = "Critical pothole requires immediate inspection."
-    reporter_email: Optional[str] = "citizen@roadguardian.gov"
+    reporter_email: Optional[str] = None
     email: Optional[str] = None
+    user_email: Optional[str] = None
+    user_gmail: Optional[str] = None
     detections_summary: Optional[Dict[str, Any]] = None
     critical_segments: Optional[List[Dict[str, Any]]] = None
 
 @app.post("/api/workflows/n8n/submit")
-def n8n_submit_report(req: N8nSubmitReportRequest):
+def n8n_submit_report(req: N8nSubmitReportRequest, current_user: Optional[dict] = Depends(get_current_user_optional)):
     """
     Step 16 guide submission endpoint to post test report payload from FastAPI to n8n.
     """
-    eff_email = req.email or req.reporter_email or "citizen@roadguardian.gov"
+    eff_email = (
+        req.email or 
+        req.user_email or 
+        req.user_gmail or 
+        (req.reporter_email if req.reporter_email and req.reporter_email != "citizen@roadguardian.gov" else None) or 
+        (current_user.get("email") if (current_user and isinstance(current_user, dict)) else None) or 
+        "citizen@roadguardian.gov"
+    )
     submission_id = f"RG-{int(time.time())}"
     payload = {
         "submission_id": submission_id,
+        "report_id": submission_id,
+        "event": "HAZARD_DETECTED",
         "target_department": req.target_department,
         "priority": req.priority,
+        "severity": "Critical",
+        "pothole_count": 3,
+        "max_confidence": 0.94,
+        "risk_score": 89.4,
+        "landmark_name": "5th Cross Rd, Indiranagar",
+        "gps": {"latitude": 12.9716, "longitude": 77.5946},
         "officer_notes": req.officer_notes,
         "reporter_email": eff_email,
         "email": eff_email,
         "user_email": eff_email,
+        "user_gmail": eff_email,
+        "recipient_email": eff_email,
+        "to": eff_email,
         "detections_summary": req.detections_summary or {
             "total_scanned": 1,
             "total_potholes": 1,
@@ -1447,7 +1483,7 @@ def n8n_submit_report(req: N8nSubmitReportRequest):
     test_res = test_n8n_connection()
     status_code = test_res.get("status_code", 200) if test_res.get("success") else 200
     
-    trigger_n8n_event("REPORT_SUBMITTED", payload)
+    trigger_n8n_event("HAZARD_DETECTED", payload)
     
     return {
         "status": "accepted",

@@ -67,10 +67,14 @@ def trigger_n8n_event(event_type: str, payload: Dict[str, Any], webhook_url: Opt
             payload.get("user_gmail") or
             payload.get("reporter_email") or 
             payload.get("email") or 
-            os.getenv("DEFAULT_REPORTER_EMAIL") or
-            "citizen@roadguardian.gov"
+            payload.get("recipient_email") or 
+            payload.get("contact_email") or 
+            ""
         )
-        email_val = str(raw_email).strip() if raw_email else "citizen@roadguardian.gov"
+        if not raw_email or not str(raw_email).strip():
+            raw_email = os.getenv("DEFAULT_REPORTER_EMAIL") or "citizen@roadguardian.gov"
+        
+        email_val = str(raw_email).strip()
         
         # Ensure all aliases are explicitly set with the active user's actual email
         payload["user_email"] = email_val
@@ -79,14 +83,26 @@ def trigger_n8n_event(event_type: str, payload: Dict[str, Any], webhook_url: Opt
         payload["email"] = email_val
 
         event_body = {
+            **payload,
             "system": "Road Guardian AI Digital Twin",
             "event": event_type,
+            "event_type": event_type,
             "timestamp": datetime.datetime.now().isoformat(),
             "user_email": email_val,
             "user_gmail": email_val,
             "reporter_email": email_val,
             "email": email_val,
-            "payload": payload
+            "recipient_email": email_val,
+            "contact_email": email_val,
+            "to": email_val,
+            "payload": {
+                **payload,
+                "user_email": email_val,
+                "user_gmail": email_val,
+                "reporter_email": email_val,
+                "email": email_val,
+                "recipient_email": email_val
+            }
         }
         headers = _get_headers()
         
@@ -97,11 +113,12 @@ def trigger_n8n_event(event_type: str, payload: Dict[str, Any], webhook_url: Opt
 
         for attempt_url in urls_to_try:
             try:
+                print(f"[n8n Dispatcher] Dispatching event '{event_type}' for User Email: '{email_val}' -> {attempt_url}")
                 response = requests.post(attempt_url, json=event_body, headers=headers, auth=_get_auth(), timeout=8)
                 if response.status_code in [200, 201, 202, 204]:
                     is_test_mode = "/webhook-test/" in attempt_url
                     mode_str = "TEST MODE" if is_test_mode else "ACTIVE PRODUCTION"
-                    print(f"[n8n Dispatcher OK ({mode_str})] Event '{event_type}' sent to n8n ({attempt_url}). Status: {response.status_code}")
+                    print(f"[n8n Dispatcher OK ({mode_str})] Event '{event_type}' sent to n8n ({attempt_url}) for {email_val}. Status: {response.status_code}")
                     return
                 elif response.status_code == 404 and len(urls_to_try) > 1 and attempt_url == urls_to_try[0]:
                     print(f"[n8n Dispatcher INFO] HTTP 404 at {attempt_url}. Retrying alternate URL: {urls_to_try[1]}...")

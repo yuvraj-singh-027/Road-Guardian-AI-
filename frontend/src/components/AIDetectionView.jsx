@@ -13,7 +13,7 @@ const decimalToDMS = (deg, isLat) => {
   return `${degrees}°${minutes}'${seconds}" ${direction}`;
 };
 
-export default function AIDetectionView({ userRole = 'public', onNavigateToAuthenticity, onNavigateToReports }) {
+export default function AIDetectionView({ userRole = 'public', user, onNavigateToAuthenticity, onNavigateToReports }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -35,10 +35,17 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchTimeoutRef = useRef(null);
 
-  // Reporter contact email (persisted for seamless public reporting)
+  // Reporter contact email (synced with logged-in user or stored email)
   const [reporterEmail, setReporterEmail] = useState(() => {
-    return localStorage.getItem('road_guardian_reporter_email') || '';
+    return user?.email || localStorage.getItem('road_guardian_reporter_email') || '';
   });
+
+  useEffect(() => {
+    if (user?.email && !reporterEmail) {
+      setReporterEmail(user.email);
+      localStorage.setItem('road_guardian_reporter_email', user.email);
+    }
+  }, [user]);
   
   // Historical public hazard reports feed
   const [recentReports, setRecentReports] = useState([]);
@@ -259,7 +266,8 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const hasValidEmail = userRole === 'admin' || (reporterEmail && emailRegex.test(reporterEmail.trim()));
+    const effectiveEmail = (reporterEmail && reporterEmail.trim()) || (user && user.email) || localStorage.getItem('road_guardian_reporter_email') || '';
+    const hasValidEmail = userRole === 'admin' || (effectiveEmail && emailRegex.test(effectiveEmail));
     if (!hasValidEmail) {
       alert('Email Required: Please enter a valid email address (e.g. citizen@example.com) to submit this road hazard report.');
       return;
@@ -278,13 +286,12 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
     if (landmarkName.trim()) {
       formData.append('landmark_name', landmarkName.trim());
     }
-    if (reporterEmail && reporterEmail.trim()) {
-      const cleanEmail = reporterEmail.trim();
-      localStorage.setItem('road_guardian_reporter_email', cleanEmail);
-      formData.append('reporter_email', cleanEmail);
-      formData.append('user_email', cleanEmail);
-      formData.append('user_gmail', cleanEmail);
-      formData.append('email', cleanEmail);
+    if (effectiveEmail) {
+      localStorage.setItem('road_guardian_reporter_email', effectiveEmail);
+      formData.append('reporter_email', effectiveEmail);
+      formData.append('user_email', effectiveEmail);
+      formData.append('user_gmail', effectiveEmail);
+      formData.append('email', effectiveEmail);
     }
 
     try {

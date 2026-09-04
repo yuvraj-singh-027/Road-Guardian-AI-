@@ -279,27 +279,16 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
     setLoading(true);
     setErrorMsg('');
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: window.location.origin
-          }
-        });
-        if (error) throw error;
-        return;
-      }
-
+      // Always use backend Google OAuth flow (not Supabase) so token comes back via ?token= param
       const res = await fetch('/api/auth/google/status');
       if (res.ok) {
         const data = await res.json();
         if (data.configured) {
-          const baseUrl = import.meta.env.VITE_API_URL || 
-            (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-              ? 'http://localhost:8000' 
-              : window.location.origin);
-          // Direct browser navigation to start the OAuth redirect safely
-          window.location.href = `${baseUrl}/api/auth/google/login`;
+          // Direct browser navigation to backend OAuth — works on both localhost & production
+          const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          const backendUrl = import.meta.env.VITE_API_URL || 
+            (isLocal ? 'http://localhost:8000' : 'https://road-guardian-ai-5.onrender.com');
+          window.location.href = `${backendUrl}/api/auth/google/login`;
           return;
         }
       }

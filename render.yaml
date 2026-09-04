@@ -11,3 +11,21 @@ services:
         value: 3.10.12
       - key: NODE_VERSION
         value: 18.17.0
+      - key: SUPABASE_DB_URL
+        sync: false   # Set this manually in Render dashboard (contains password)
+      - key: JWT_SECRET
+        value: road_guardian_secure_secret_hash_2026_key
+      - key: FRONTEND_URL
+        value: https://road-guardian-ai-theta.vercel.app
+      # Google OAuth
+      - key: GOOGLE_CLIENT_ID
+        value: 286241720016-juom2c2btgv8rslou225i4gl0n81ripi.apps.googleusercontent.com
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false   # Set this manually in Render dashboard (sensitive)
+      - key: GOOGLE_REDIRECT_URI
+        value: https://road-guardian-ai-5.onrender.com/api/auth/google/callback
+      # n8n Workflow Automation
+      - key: N8N_WEBHOOK_URL
+        value: https://yuvi027.app.n8n.cloud/webhook/road-guardian-report
+      - key: N8N_HEADER_NAME
+        value: road-guardian-ai

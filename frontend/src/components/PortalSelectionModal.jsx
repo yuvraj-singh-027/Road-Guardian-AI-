@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ShieldAlert, Users, Lock, ArrowRight, Activity, CheckCircle2, KeyRound, AlertCircle, Info } from 'lucide-react';
+import { ShieldAlert, Users, Lock, ArrowRight, Activity, CheckCircle2, KeyRound, AlertCircle, LogOut, User as UserIcon } from 'lucide-react';
 
-export default function PortalSelectionModal({ onSelectRole }) {
+export default function PortalSelectionModal({ user, onSelectRole, onLogout }) {
   const [showAdminPasscode, setShowAdminPasscode] = useState(false);
   const [passcode, setPasscode] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -55,6 +55,49 @@ export default function PortalSelectionModal({ onSelectRole }) {
   return (
     <div className="portal-overlay">
       <div className="portal-container">
+        {/* User Account Bar if logged in */}
+        {user && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'rgba(24, 24, 27, 0.8)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '12px',
+            padding: '10px 16px',
+            marginBottom: '20px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {user.profile_picture ? (
+                <img 
+                  src={user.profile_picture} 
+                  alt="Avatar" 
+                  style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #00E6B4' }} 
+                />
+              ) : (
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(0, 230, 180, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00E6B4' }}>
+                  <UserIcon size={16} />
+                </div>
+              )}
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>{user.name || 'Logged In User'}</div>
+                <div style={{ fontSize: '0.72rem', color: '#a1a1aa' }}>{user.email}</div>
+              </div>
+            </div>
+
+            {onLogout && (
+              <button 
+                onClick={onLogout}
+                className="btn-secondary"
+                style={{ fontSize: '0.75rem', padding: '6px 12px', gap: '6px', borderColor: 'rgba(239,68,68,0.3)', color: '#f87171' }}
+                title="Log out or switch to Google login"
+              >
+                <LogOut size={13} /> Switch Account / Google Login
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Header Branding */}
         <div className="portal-header">
           <div className="brand-icon" style={{ margin: '0 auto 14px', width: '48px', height: '48px' }}>
@@ -147,6 +190,19 @@ export default function PortalSelectionModal({ onSelectRole }) {
             )}
           </div>
         </div>
+
+        {/* Return to Login / Google option footer if not authenticated */}
+        {!user && onLogout && (
+          <div style={{ marginTop: '20px', textAlign: 'center' }}>
+            <button 
+              onClick={onLogout}
+              className="btn-secondary"
+              style={{ fontSize: '0.8rem', padding: '8px 16px', margin: '0 auto' }}
+            >
+              Sign In with Google / Email
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

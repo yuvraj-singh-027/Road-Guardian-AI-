@@ -364,13 +364,24 @@ def create_user(
     v_token = secrets.token_urlsafe(32) if is_verified == 0 else None
 
     try:
-        if db_type in ["mysql", "postgres"]:
+        if db_type == "postgres":
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO users (name, email, password_hash, is_verified, verification_token, google_id, profile_picture, role)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (name, email_clean, pw_hash, is_verified, v_token, google_id, profile_picture, role))
+                row = cursor.fetchone()
+                user_id = row["id"] if isinstance(row, dict) else row[0]
+                conn.commit()
+        elif db_type == "mysql":
             with conn.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO users (name, email, password_hash, is_verified, verification_token, google_id, profile_picture, role)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, (name, email_clean, pw_hash, is_verified, v_token, google_id, profile_picture, role))
                 user_id = cursor.lastrowid
+                conn.commit()
         else:
             with conn:
                 cursor = conn.execute("""

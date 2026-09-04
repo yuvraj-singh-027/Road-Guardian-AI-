@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Zap, CheckCircle2, AlertTriangle, RefreshCw, Send, ShieldCheck, Database, FileSpreadsheet, Server, ExternalLink, ArrowRight } from 'lucide-react';
 
-export default function N8nAutomationView() {
+export default function N8nAutomationView({ user }) {
   const [statusData, setStatusData] = useState(null);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
@@ -67,10 +67,22 @@ export default function N8nAutomationView() {
     setIsSubmitting(true);
     setSubmitResult(null);
     try {
+      const activeEmail = (user && user.email) || localStorage.getItem('road_guardian_reporter_email') || '';
       const sampleReport = {
+        event: "HAZARD_DETECTED",
         target_department: "Municipal Public Works Department (PWD)",
         priority: "Critical Priority",
+        severity: "Critical",
+        pothole_count: 3,
+        max_confidence: 0.94,
+        risk_score: 89.4,
+        landmark_name: "5th Cross Rd, Indiranagar, Bengaluru",
+        gps: { latitude: 12.9716, longitude: 77.5946 },
         officer_notes: "Live automated triage report from Web Dashboard Control Hub.",
+        reporter_email: activeEmail,
+        email: activeEmail,
+        user_email: activeEmail,
+        user_gmail: activeEmail,
         detections_summary: {
           total_scanned: 6,
           total_potholes: 3,

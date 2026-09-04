@@ -504,6 +504,9 @@ def is_duplicate_detection(
                 else:
                     dt = datetime.now()
 
+                if hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
+                    dt = dt.replace(tzinfo=None)
+
                 time_diff = abs((datetime.now() - dt).total_seconds())
                 if time_diff <= temporal_window_sec:
                     return True, f"Spatial-Temporal duplicate hazard logged within {int(time_diff)}s (Record ID #{rec_id})"
@@ -575,7 +578,21 @@ def insert_detection(
     conn, db_type = get_db_connection()
     inserted_id = None
     try:
-        if db_type in ["mysql", "postgres"]:
+        if db_type == "postgres":
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO pothole_detections 
+                    (image_name, latitude, longitude, severity, confidence, time, lat_numeric, lon_numeric, 
+                     risk_score, image_hash, user_id, user_email, reporter_email, user_gmail, phash, authenticity_score, landmark_name, description, damage_type, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, 
+                      risk_score, img_hash, user_id, eff_email, eff_email, eff_email, phash or None, authenticity_score, landmark_name, description, damage_type, status))
+                row = cursor.fetchone()
+                if row:
+                    inserted_id = row["id"] if isinstance(row, dict) else row[0]
+                conn.commit()
+        elif db_type == "mysql":
             with conn.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO pothole_detections 
@@ -585,6 +602,7 @@ def insert_detection(
                 """, (image_name, str(latitude), str(longitude), severity, float(confidence), time_str, lat_num, lon_num, 
                       risk_score, img_hash, user_id, eff_email, eff_email, eff_email, phash or None, authenticity_score, landmark_name, description, damage_type, status))
                 inserted_id = cursor.lastrowid
+                conn.commit()
         else: # sqlite
             with conn:
                 cursor = conn.execute("""

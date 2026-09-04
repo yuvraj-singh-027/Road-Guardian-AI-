@@ -93,10 +93,11 @@ export default function App() {
     } catch (err) {
       clearTimeout(timeoutId);
       console.warn('Auth verification timeout or error:', err);
-      // Fallback offline support if token exists locally
-      setIsAuthenticated(true);
-      const savedRole = sessionStorage.getItem('road_guardian_role') || 'public';
-      setUserRole(savedRole);
+      localStorage.removeItem('road_guardian_token');
+      sessionStorage.removeItem('road_guardian_role');
+      setIsAuthenticated(false);
+      setUser(null);
+      setUserRole(null);
     } finally {
       setIsAuthLoading(false);
     }
@@ -264,7 +265,9 @@ export default function App() {
   if (userRole === null) {
     return (
       <PortalSelectionModal 
+        user={user}
         onSelectRole={handleSelectRole}
+        onLogout={handleLogout}
       />
     );
   }
@@ -309,6 +312,7 @@ export default function App() {
             ) : (
               <AIDetectionView 
                 userRole={userRole} 
+                user={user}
                 onNavigateToReports={() => setActiveTab('my-reports')}
               />
             )}
@@ -412,6 +416,7 @@ export default function App() {
         {activeTab === 'detection' && (
           <AIDetectionView 
             userRole={userRole} 
+            user={user}
             onNavigateToAuthenticity={() => setActiveTab('authenticity')}
             onNavigateToReports={() => setActiveTab('my-reports')}
           />
