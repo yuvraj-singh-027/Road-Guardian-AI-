@@ -295,20 +295,28 @@ export default function AIDetectionView({ userRole = 'public', user, onNavigateT
     }
 
     try {
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const backendBase = import.meta.env.VITE_API_URL || (isLocal ? 'http://localhost:8000' : '');
+      
       let response;
       try {
-        response = await fetch('/api/detect/image', {
+        response = await fetch(`${backendBase}/api/detect/image`, {
           method: 'POST',
           body: formData,
         });
-      } catch (e) {
-        response = await fetch('http://localhost:8000/api/detect/image', {
+      } catch (networkErr) {
+        response = await fetch('/api/detect/image', {
           method: 'POST',
           body: formData,
         });
       }
 
-      const data = await response.json().catch(() => null);
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (jsonErr) {
+        // Fallback if response body is non-JSON
+      }
 
       // HTTP 422 = Authenticity Engine rejected the image (suspicious/tampered)
       if (response.status === 422 && data?.detail?.rejected) {
@@ -327,8 +335,8 @@ export default function AIDetectionView({ userRole = 'public', user, onNavigateT
       if (!response.ok) {
         const errorDetail = Array.isArray(data?.detail)
           ? data.detail.map(d => d.msg || JSON.stringify(d)).join(', ')
-          : (typeof data?.detail === 'string' ? data.detail : response.statusText || 'Server Error');
-        throw new Error(`API Error: ${errorDetail}`);
+          : (typeof data?.detail === 'string' ? data.detail : (data?.message || response.statusText || 'Unable to process image on AI detector.'));
+        throw new Error(errorDetail);
       }
 
       setDetectionResult(data);
@@ -336,7 +344,7 @@ export default function AIDetectionView({ userRole = 'public', user, onNavigateT
       fetchHistory();
     } catch (err) {
       console.error(err);
-      alert(`Detection Error: ${err.message}`);
+      alert(`Detection Notice: ${err.message}`);
     } finally {
       setIsProcessing(false);
     }

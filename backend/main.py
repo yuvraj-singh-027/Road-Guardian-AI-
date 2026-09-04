@@ -616,20 +616,13 @@ async def detect_image(
 ):
     contents = await file.read()
 
-    # Dynamic User Email: Always prioritize the explicitly submitted form email first, then current logged-in user
+    # Dynamic User Email: Prioritize form email, then session user, with graceful fallback
     submitted_email = reporter_email or user_email or user_gmail or email
-    resolved_email: Optional[str] = None
-    if submitted_email and str(submitted_email).strip():
+    resolved_email: str = "yuvrajmksingh20@gmail.com"
+    if submitted_email and str(submitted_email).strip() and "@" in str(submitted_email):
         resolved_email = str(submitted_email).strip()
     elif current_user and isinstance(current_user, dict) and current_user.get("email"):
         resolved_email = str(current_user.get("email")).strip()
-
-    # Enforce mandatory email address for all hazard submissions
-    if not resolved_email or not resolved_email.strip() or "@" not in resolved_email or "." not in resolved_email:
-        raise HTTPException(
-            status_code=400,
-            detail="A valid email address is required to submit and track this road hazard report."
-        )
 
     # 1. BASIC IMAGE VALIDATION LAYER
     validate_uploaded_image(contents, file.filename or "uploaded_hazard.jpg", file.content_type or "")
