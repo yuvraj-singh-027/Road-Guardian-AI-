@@ -35,8 +35,10 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchTimeoutRef = useRef(null);
 
-  // Reporter contact email (for public anonymous users)
-  const [reporterEmail, setReporterEmail] = useState('');
+  // Reporter contact email (persisted for seamless public reporting)
+  const [reporterEmail, setReporterEmail] = useState(() => {
+    return localStorage.getItem('road_guardian_reporter_email') || 'yuvrajmksing20@gmail.com';
+  });
   
   // Historical public hazard reports feed
   const [recentReports, setRecentReports] = useState([]);
@@ -277,7 +279,12 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
       formData.append('landmark_name', landmarkName.trim());
     }
     if (reporterEmail && reporterEmail.trim()) {
-      formData.append('reporter_email', reporterEmail.trim());
+      const cleanEmail = reporterEmail.trim();
+      localStorage.setItem('road_guardian_reporter_email', cleanEmail);
+      formData.append('reporter_email', cleanEmail);
+      formData.append('user_email', cleanEmail);
+      formData.append('user_gmail', cleanEmail);
+      formData.append('email', cleanEmail);
     }
 
     try {
