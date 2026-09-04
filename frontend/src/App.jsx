@@ -245,6 +245,8 @@ export default function App() {
                 userRole={userRole} 
                 onNavigateToDetection={() => setActiveTab('detection')} 
               />
+            ) : activeTab === 'digital-twin' ? (
+              <DigitalTwinMapView />
             ) : activeTab === 'public-feed' ? (
               <PublicFeedHistoryView 
                 onNavigateToReport={() => setActiveTab('detection')} 
@@ -383,7 +385,7 @@ export default function App() {
             onNavigateToMap={() => setActiveTab('digital-twin')} 
           />
         )}
-        {activeTab === 'digital-twin' && <DigitalTwinMapView />}
+        {activeTab === 'digital-twin' && <DigitalTwinMapView onNavigateToReroute={() => setActiveTab('traffic-reroute')} />}
         {activeTab === 'traffic-reroute' && (userRole === 'admin' ? <TrafficRerouteView /> : renderRestrictedAccessNotice())}
         {activeTab === 'risk-calculator' && (userRole === 'admin' ? <RiskCalculatorView /> : renderRestrictedAccessNotice())}
       </div>

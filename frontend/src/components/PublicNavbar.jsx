@@ -7,6 +7,7 @@ import {
 export default function PublicNavbar({ activeTab, setActiveTab, user, onSwitchPortal, onOpenProfile, onLogout }) {
   const navLinks = [
     { id: 'detection', label: 'Report Hazard & Scan', icon: Camera, badge: 'AI Vision' },
+    { id: 'digital-twin', label: 'Digital Twin & Traffic Map', icon: Map, badge: 'SUMO Sim' },
     { id: 'my-reports', label: 'Reports & Incident History', icon: ClipboardList, badge: 'Live Feed' },
   ];
 

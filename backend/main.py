@@ -235,6 +235,15 @@ class TrafficRerouteRequest(BaseModel):
     center_lat: Optional[float] = Field(default=28.6139)
     center_lon: Optional[float] = Field(default=77.2090)
 
+class SumoPotholeSimRequest(BaseModel):
+    road_name: Optional[str] = Field(default="Municipal Arterial Corridor")
+    severity: Optional[str] = Field(default="High")
+    damage_count: Optional[int] = Field(default=1)
+    risk_score: Optional[float] = Field(default=78.5)
+    base_speed_kmh: Optional[float] = Field(default=50.0)
+    base_flow_vph: Optional[int] = Field(default=850)
+    weather: Optional[str] = Field(default="Clear")
+    traffic_density: Optional[str] = Field(default="High")
 
 class PDFReportRequest(BaseModel):
     target_department: Optional[str] = Field(default="Municipal Public Works Department (PWD)")
@@ -1247,6 +1256,46 @@ def trigger_traffic_reroute(req: TrafficRerouteRequest, current_user: Optional[d
         "rerouting_data": rerouting_data,
         "updated_network": updated_network
     }
+
+@app.post("/api/traffic/sumo-simulate-pothole")
+def sumo_simulate_pothole_endpoint(req: SumoPotholeSimRequest):
+    """
+    Executes microscopic SUMO/TraCI bottleneck & detour simulation for a specific pothole hazard.
+    Used when a user clicks on any pothole on the Digital Twin Map.
+    """
+    sim = simulate_sumo_pothole_impact(
+        road_name=req.road_name or "Municipal Arterial Corridor",
+        severity=req.severity or "High",
+        damage_count=req.damage_count or 1,
+        risk_score=float(req.risk_score or 78.5),
+        base_speed_kmh=float(req.base_speed_kmh or 50.0),
+        base_flow_vph=int(req.base_flow_vph or 850),
+        weather=req.weather or "Clear",
+        traffic_density=req.traffic_density or "High"
+    )
+    return sim
+
+@app.get("/api/traffic/sumo-simulate-pothole")
+def sumo_simulate_pothole_get_endpoint(
+    road_name: str = Query("Municipal Arterial Corridor"),
+    severity: str = Query("High"),
+    damage_count: int = Query(1),
+    risk_score: float = Query(78.5),
+    base_speed_kmh: float = Query(50.0),
+    base_flow_vph: int = Query(850),
+    weather: str = Query("Clear"),
+    traffic_density: str = Query("High")
+):
+    return simulate_sumo_pothole_impact(
+        road_name=road_name,
+        severity=severity,
+        damage_count=damage_count,
+        risk_score=risk_score,
+        base_speed_kmh=base_speed_kmh,
+        base_flow_vph=base_flow_vph,
+        weather=weather,
+        traffic_density=traffic_density
+    )
 
 @app.post("/api/simulate-traffic")
 def simulate_traffic_compat(req: TrafficRerouteRequest):
