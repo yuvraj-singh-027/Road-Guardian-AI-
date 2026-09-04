@@ -274,29 +274,17 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
     }
   };
 
-  // Check if standard keys are set by querying status or using Supabase
-  const triggerGoogleLogin = async () => {
+  // Direct Google OAuth Login
+  const triggerGoogleLogin = () => {
     setLoading(true);
     setErrorMsg('');
     try {
-      // Always use backend Google OAuth flow (not Supabase) so token comes back via ?token= param
-      const res = await fetch('/api/auth/google/status');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.configured) {
-          // Direct browser navigation to backend OAuth — works on both localhost & production
-          const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-          const backendUrl = import.meta.env.VITE_API_URL || 
-            (isLocal ? 'http://localhost:8000' : 'https://road-guardian-ai-5.onrender.com');
-          window.location.href = `${backendUrl}/api/auth/google/login`;
-          return;
-        }
-      }
-      setShowSandbox(true);
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const backendUrl = import.meta.env.VITE_API_URL || 
+        (isLocal ? 'http://localhost:8000' : 'https://road-guardian-ai-5.onrender.com');
+      window.location.href = `${backendUrl}/api/auth/google/login`;
     } catch (err) {
-      // Fallback to Sandbox picker directly on error/block
-      setShowSandbox(true);
-    } finally {
+      setErrorMsg('Failed to initialize Google Login.');
       setLoading(false);
     }
   };
