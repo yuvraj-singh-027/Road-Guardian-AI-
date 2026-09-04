@@ -62,15 +62,21 @@ def trigger_n8n_event(event_type: str, payload: Dict[str, Any], webhook_url: Opt
         return
 
     def _async_post():
-        email_val = (
+        raw_email = (
             payload.get("user_email") or 
+            payload.get("user_gmail") or
             payload.get("reporter_email") or 
             payload.get("email") or 
-            "citizen@roadguardian.gov"
+            os.getenv("DEFAULT_REPORTER_EMAIL") or
+            "yuvrajmksing20@gmail.com"
         )
+        email_val = str(raw_email).strip() if raw_email else "yuvrajmksing20@gmail.com"
+        if not email_val or email_val == "citizen@roadguardian.gov":
+            email_val = "yuvrajmksing20@gmail.com"
         
-        # Ensure all three aliases are explicitly set inside payload
+        # Ensure all aliases are explicitly set inside payload
         payload["user_email"] = email_val
+        payload["user_gmail"] = email_val
         payload["reporter_email"] = email_val
         payload["email"] = email_val
 
@@ -79,6 +85,7 @@ def trigger_n8n_event(event_type: str, payload: Dict[str, Any], webhook_url: Opt
             "event": event_type,
             "timestamp": datetime.datetime.now().isoformat(),
             "user_email": email_val,
+            "user_gmail": email_val,
             "reporter_email": email_val,
             "email": email_val,
             "payload": payload
