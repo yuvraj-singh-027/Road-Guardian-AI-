@@ -37,7 +37,7 @@ export default function AIDetectionView({ userRole = 'public', onNavigateToAuthe
 
   // Reporter contact email (persisted for seamless public reporting)
   const [reporterEmail, setReporterEmail] = useState(() => {
-    return localStorage.getItem('road_guardian_reporter_email') || 'yuvrajmksing20@gmail.com';
+    return localStorage.getItem('road_guardian_reporter_email') || '';
   });
   
   // Historical public hazard reports feed

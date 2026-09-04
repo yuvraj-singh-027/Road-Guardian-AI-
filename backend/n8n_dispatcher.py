@@ -68,13 +68,11 @@ def trigger_n8n_event(event_type: str, payload: Dict[str, Any], webhook_url: Opt
             payload.get("reporter_email") or 
             payload.get("email") or 
             os.getenv("DEFAULT_REPORTER_EMAIL") or
-            "yuvrajmksing20@gmail.com"
+            "citizen@roadguardian.gov"
         )
-        email_val = str(raw_email).strip() if raw_email else "yuvrajmksing20@gmail.com"
-        if not email_val or email_val == "citizen@roadguardian.gov":
-            email_val = "yuvrajmksing20@gmail.com"
+        email_val = str(raw_email).strip() if raw_email else "citizen@roadguardian.gov"
         
-        # Ensure all aliases are explicitly set inside payload
+        # Ensure all aliases are explicitly set with the active user's actual email
         payload["user_email"] = email_val
         payload["user_gmail"] = email_val
         payload["reporter_email"] = email_val

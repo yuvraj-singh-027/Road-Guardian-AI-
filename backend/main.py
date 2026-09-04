@@ -590,16 +590,20 @@ async def detect_image(
     manual_lon: Optional[float] = Form(None),
     landmark_name: Optional[str] = Form(None),
     reporter_email: Optional[str] = Form(None),
+    user_email: Optional[str] = Form(None),
+    user_gmail: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
     current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
     contents = await file.read()
 
-    # Resolve reporter email: prefer logged-in user's email, fall back to form-submitted email
+    # Dynamic User Email: Always prioritize logged-in user or the actual submitted form email
+    submitted_email = reporter_email or user_email or user_gmail or email
     resolved_email: Optional[str] = None
-    if current_user and isinstance(current_user, dict):
-        resolved_email = current_user.get("email") or reporter_email or None
-    else:
-        resolved_email = reporter_email or None
+    if current_user and isinstance(current_user, dict) and current_user.get("email"):
+        resolved_email = str(current_user.get("email")).strip()
+    elif submitted_email and str(submitted_email).strip():
+        resolved_email = str(submitted_email).strip()
 
     # Enforce mandatory email address for all hazard submissions
     if not resolved_email or not resolved_email.strip() or "@" not in resolved_email or "." not in resolved_email:
