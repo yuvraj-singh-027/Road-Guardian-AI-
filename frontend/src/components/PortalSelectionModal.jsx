@@ -90,9 +90,9 @@ export default function PortalSelectionModal({ user, onSelectRole, onLogout }) {
                 onClick={onLogout}
                 className="btn-secondary"
                 style={{ fontSize: '0.75rem', padding: '6px 12px', gap: '6px', borderColor: 'rgba(239,68,68,0.3)', color: '#f87171' }}
-                title="Log out or switch to Google login"
+                title="Log out and switch account"
               >
-                <LogOut size={13} /> Switch Account / Google Login
+                <LogOut size={13} /> Switch Account / Log Out
               </button>
             )}
           </div>
@@ -191,7 +191,7 @@ export default function PortalSelectionModal({ user, onSelectRole, onLogout }) {
           </div>
         </div>
 
-        {/* Return to Login / Google option footer if not authenticated */}
+        {/* Return to Login / Register option footer if not authenticated */}
         {!user && onLogout && (
           <div style={{ marginTop: '20px', textAlign: 'center' }}>
             <button 
@@ -199,7 +199,7 @@ export default function PortalSelectionModal({ user, onSelectRole, onLogout }) {
               className="btn-secondary"
               style={{ fontSize: '0.8rem', padding: '8px 16px', margin: '0 auto' }}
             >
-              Sign In with Google / Email
+              Sign In / Register
             </button>
           </div>
         )}
