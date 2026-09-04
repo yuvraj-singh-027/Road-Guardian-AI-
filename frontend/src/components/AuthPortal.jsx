@@ -71,7 +71,7 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
     }
   };
 
-  // 2. Supabase & Local Login Action
+  // 2. Direct Login Action
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     if (!email.trim() || !password) {
@@ -84,33 +84,6 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
     setSuccessMsg('');
 
     try {
-      // 1. Authenticate with Supabase Auth if configured
-      if (isSupabaseConfigured && supabase) {
-        try {
-          const { data: supaData, error: supaError } = await supabase.auth.signInWithPassword({
-            email: email.trim(),
-            password,
-          });
-
-          if (!supaError && supaData?.session) {
-            const supaUser = {
-              id: supaData.user.id,
-              name: supaData.user.user_metadata?.name || supaData.user.user_metadata?.full_name || email.split('@')[0],
-              email: supaData.user.email,
-              role: supaData.user.user_metadata?.role || (email.toLowerCase() === 'admin@roadguardian.gov' ? 'admin' : 'public'),
-              token: supaData.session.access_token,
-            };
-            localStorage.setItem('road_guardian_token', supaData.session.access_token);
-            sessionStorage.setItem('road_guardian_role', supaUser.role);
-            onAuthSuccess(supaUser);
-            return;
-          }
-        } catch (supaErr) {
-          console.warn('[Supabase Auth Warning]:', supaErr);
-        }
-      }
-
-      // 2. Direct backend authentication
       const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,7 +111,7 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
     }
   };
 
-  // 3. Supabase & Local Register Account Submit
+  // 3. Direct Register Account Submit
   const handleSignUpSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -166,35 +139,7 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
     setErrorMsg('');
     setSuccessMsg('');
 
-    const targetRole = showAdminField && adminPasscode.trim() === 'Admin@RoadGuardian2026' ? 'admin' : 'public';
-
     try {
-      // 1. Register with Supabase Auth if configured
-      if (isSupabaseConfigured && supabase) {
-        try {
-          const { data: supaData, error: supaError } = await supabase.auth.signUp({
-            email: email.trim(),
-            password,
-            options: {
-              data: {
-                name: name.trim(),
-                full_name: name.trim(),
-                role: targetRole,
-              },
-            },
-          });
-
-          if (!supaError && supaData?.user) {
-            setSuccessMsg('Account created successfully in Supabase! Check your inbox for confirmation.');
-            setView('verify-alert');
-            return;
-          }
-        } catch (supaErr) {
-          console.warn('[Supabase SignUp Warning]:', supaErr);
-        }
-      }
-
-      // 2. Direct backend registration
       const res = await fetch(`${API_BASE}/api/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -320,26 +265,13 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
   };
 
   // 7. Google OAuth Login
-  const handleSupabaseGoogleLogin = async () => {
+  const handleGoogleLogin = async () => {
     setLoading(true);
     setErrorMsg('');
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: window.location.origin,
-          },
-        });
-        if (error) {
-          setErrorMsg(error.message || 'Failed to initialize Google login.');
-          setLoading(false);
-        }
-      } else {
-        const backendOrigin = import.meta.env.VITE_API_URL || '';
-        const currentOrigin = encodeURIComponent(window.location.origin);
-        window.location.href = `${backendOrigin}/api/auth/google/login?redirect_origin=${currentOrigin}`;
-      }
+      const backendOrigin = import.meta.env.VITE_API_URL || '';
+      const currentOrigin = encodeURIComponent(window.location.origin);
+      window.location.href = `${backendOrigin}/api/auth/google/login?redirect_origin=${currentOrigin}`;
     } catch (err) {
       setErrorMsg('Error connecting to Google OAuth.');
       setLoading(false);
@@ -367,8 +299,8 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
           <p className="portal-subtitle" style={{ fontSize: '0.82rem', color: '#a1a1aa' }}>
             Infrastructure AI & City Traffic Intelligence Twin
           </p>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: '#38BDF8', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.2)', padding: '4px 12px', borderRadius: '12px', marginTop: '10px', fontWeight: 500 }}>
-            <Zap size={12} color="#38BDF8" /> {isSupabaseConfigured ? 'Powered by Supabase Enterprise Auth' : 'Supabase & Hybrid Auth System Active'}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: '#00E6B4', background: 'rgba(0, 230, 180, 0.08)', border: '1px solid rgba(0, 230, 180, 0.2)', padding: '4px 12px', borderRadius: '12px', marginTop: '10px', fontWeight: 500 }}>
+            <Zap size={12} color="#00E6B4" /> Enterprise Authentication Active
           </div>
         </div>
 
@@ -495,7 +427,7 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
                   <button
                     type="button"
                     className="btn-secondary"
-                    onClick={handleSupabaseGoogleLogin}
+                    onClick={handleGoogleLogin}
                     style={{ width: '100%', justifyContent: 'center', padding: '11px', gap: '10px', fontSize: '0.85rem' }}
                     disabled={loading}
                   >
@@ -641,7 +573,7 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={handleSupabaseGoogleLogin}
+                onClick={handleGoogleLogin}
                 style={{ width: '100%', justifyContent: 'center', padding: '11px', gap: '10px', fontSize: '0.85rem' }}
                 disabled={loading}
               >

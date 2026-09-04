@@ -14,7 +14,6 @@ import PublicNavbar from './components/PublicNavbar';
 import UserProfileModal from './components/UserProfileModal';
 import AuthPortal from './components/AuthPortal';
 import CitizenGuideWidget from './components/CitizenGuideWidget';
-import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, Lock, KeyRound, ArrowUpRight, ArrowDownRight, Loader } from 'lucide-react';
 
 // --- GLOBAL FETCH TOKEN INTERCEPTOR ---
@@ -54,36 +53,27 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('detection');
   const [summaryStats, setSummaryStats] = useState(null);
 
-  // Sync Supabase Auth session
+  // Sync User session from JWT token via native /api/auth/me
   useEffect(() => {
-    if (isSupabaseConfigured && supabase) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user) {
-          const detectedRole = session.user.user_metadata?.role || (session.user.email?.toLowerCase() === 'admin@roadguardian.gov' ? 'admin' : 'public');
-          setUser({
-            id: session.user.id,
-            name: session.user.user_metadata?.name || session.user.user_metadata?.full_name || session.user.email.split('@')[0],
-            email: session.user.email,
-            role: detectedRole,
-          });
-          localStorage.setItem('road_guardian_token', session.access_token);
-        }
-      });
-
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (session?.user) {
-          const detectedRole = session.user.user_metadata?.role || (session.user.email?.toLowerCase() === 'admin@roadguardian.gov' ? 'admin' : 'public');
-          setUser({
-            id: session.user.id,
-            name: session.user.user_metadata?.name || session.user.user_metadata?.full_name || session.user.email.split('@')[0],
-            email: session.user.email,
-            role: detectedRole,
-          });
-          localStorage.setItem('road_guardian_token', session.access_token);
-        }
-      });
-
-      return () => subscription?.unsubscribe();
+    const token = localStorage.getItem('road_guardian_token');
+    if (token) {
+      fetch('/api/auth/me')
+        .then((res) => {
+          if (res.ok) return res.json();
+          throw new Error('Unauthorized');
+        })
+        .then((userData) => {
+          setUser(userData);
+          if (userData.role) {
+            sessionStorage.setItem('road_guardian_role', userData.role);
+            if (!userRole) setUserRole(userData.role);
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('road_guardian_token');
+          sessionStorage.removeItem('road_guardian_role');
+          setUser(null);
+        });
     }
   }, []);
 
@@ -113,11 +103,12 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    if (isSupabaseConfigured && supabase) {
-      await supabase.auth.signOut().catch(() => null);
-    }
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' }).catch(() => null);
+    } catch (_) {}
     localStorage.removeItem('road_guardian_token');
     sessionStorage.removeItem('road_guardian_role');
+    setUser(null);
     setUserRole(null);
     setShowProfileModal(false);
   };
