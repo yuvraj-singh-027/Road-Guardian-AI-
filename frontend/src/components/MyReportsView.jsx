@@ -596,12 +596,15 @@ export default function MyReportsView({ userRole, onNavigateToDetection, initial
                     </div>
                   </div>
 
-                  {userRole === 'admin' && (
-                    <div style={{ marginTop: '8px', padding: '6px 8px', background: 'rgba(56, 189, 248, 0.08)', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.2)', fontSize: '0.72rem', color: '#38BDF8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <User size={12} /> Citizen: <b style={{ color: '#fff' }}>{report.user_name || 'Public Citizen'}</b>
+                  {/* Reporter Contact Email Badge */}
+                  {(report.user_email || report.reporter_email) && (
+                    <div style={{ marginTop: '10px', padding: '6px 10px', background: 'rgba(56, 189, 248, 0.08)', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.2)', fontSize: '0.72rem', color: '#38BDF8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <User size={12} /> <b style={{ color: '#fff' }}>{report.user_name || 'Citizen'}</b>
                       </span>
-                      <span style={{ color: '#a1a1aa', fontSize: '0.68rem' }}>{report.user_email || ''}</span>
+                      <span style={{ color: '#00E6B4', fontSize: '0.72rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        ✉️ {report.user_email || report.reporter_email}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -669,8 +672,14 @@ export default function MyReportsView({ userRole, onNavigateToDetection, initial
                     {getStatusBadge(selectedReport.status).label}
                   </span>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: '#a1a1aa', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ fontSize: '0.8rem', color: '#a1a1aa', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                   <span>Submitted by: <strong>{selectedReport.user_name}</strong></span>
+                  {(selectedReport.user_email || selectedReport.reporter_email) && (
+                    <>
+                      <span>•</span>
+                      <span style={{ color: '#00E6B4' }}>✉️ {selectedReport.user_email || selectedReport.reporter_email}</span>
+                    </>
+                  )}
                   <span>•</span>
                   <span>{selectedReport.created_at}</span>
                 </div>
