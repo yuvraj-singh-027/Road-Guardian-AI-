@@ -3,20 +3,13 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 
-// Global fetch interceptor to redirect API calls properly across dev and production
+// Global fetch interceptor to handle cross-origin API calls only if an external VITE_API_URL is configured
 const originalFetch = window.fetch;
 window.fetch = (url, options) => {
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const customApiUrl = import.meta.env.VITE_API_URL || '';
-
   if (typeof url === 'string') {
-    if (url.startsWith('http://localhost:8000')) {
-      if (customApiUrl) {
-        url = url.replace('http://localhost:8000', customApiUrl);
-      } else if (!isLocalhost) {
-        url = url.replace('http://localhost:8000', '');
-      }
-    } else if (customApiUrl && url.startsWith('/api/')) {
+    // If backend URL is set explicitly to remote backend in production
+    if (customApiUrl && !customApiUrl.includes('localhost') && !customApiUrl.includes('127.0.0.1') && url.startsWith('/api/')) {
       url = `${customApiUrl}${url}`;
     }
   }
