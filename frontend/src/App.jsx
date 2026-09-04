@@ -12,7 +12,6 @@ import PublicFeedHistoryView from './components/PublicFeedHistoryView';
 import N8nAutomationView from './components/N8nAutomationView';
 import PublicNavbar from './components/PublicNavbar';
 import UserProfileModal from './components/UserProfileModal';
-import AuthPortal from './components/AuthPortal';
 import CitizenGuideWidget from './components/CitizenGuideWidget';
 import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, Lock, KeyRound, ArrowUpRight, ArrowDownRight, Loader } from 'lucide-react';
 
@@ -43,101 +42,27 @@ if (typeof window !== 'undefined' && !window.__fetch_intercepted__) {
 }
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState({
+    id: 1,
+    name: 'Yuvraj Singh',
+    email: 'yuvrajmksingh20@gmail.com',
+    role: 'admin',
+    department: 'Public Works & Road Safety Authority'
+  });
   const [showProfileModal, setShowProfileModal] = useState(false);
-
-  const [userRole, setUserRole] = useState(null); // null triggers PortalSelectionModal
+  const [userRole, setUserRole] = useState(() => sessionStorage.getItem('road_guardian_role') || null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState('detection');
   const [summaryStats, setSummaryStats] = useState(null);
 
-  // Sync auth state
-  const checkAuth = async () => {
-    const token = localStorage.getItem('road_guardian_token');
-    if (!token) {
-      setIsAuthenticated(false);
-      setUser(null);
-      setUserRole(null);
-      setIsAuthLoading(false);
-      return;
-    }
-
-    // Abort controller to prevent initial load freeze (max 3 sec timeout)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-    try {
-      const res = await fetch('/api/auth/me', { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const userData = await res.json();
-        setUser(userData);
-        setIsAuthenticated(true);
-        // Load role from session storage or default to user's role
-        const savedRole = sessionStorage.getItem('road_guardian_role');
-        if (savedRole) {
-          setUserRole(savedRole);
-        } else {
-          setUserRole(null); // Triggers PortalSelectionModal
-        }
-      } else {
-        localStorage.removeItem('road_guardian_token');
-        sessionStorage.removeItem('road_guardian_role');
-        setIsAuthenticated(false);
-        setUser(null);
-        setUserRole(null);
-      }
-    } catch (err) {
-      clearTimeout(timeoutId);
-      console.warn('Auth verification timeout or error:', err);
-      localStorage.removeItem('road_guardian_token');
-      sessionStorage.removeItem('road_guardian_role');
-      setIsAuthenticated(false);
-      setUser(null);
-      setUserRole(null);
-    } finally {
-      setIsAuthLoading(false);
-    }
-  };
-
+  // Fetch summary stats
   useEffect(() => {
-    // Check if token exists in URL search params (e.g. from Google OAuth redirect)
-    const params = new URLSearchParams(window.location.search);
-    const urlToken = params.get('token');
-    if (urlToken) {
-      localStorage.setItem('road_guardian_token', urlToken);
-      // Clean up URL parameters without refreshing page
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-
-    checkAuth();
-
-    const handleUnauthorized = () => {
-      setIsAuthenticated(false);
-      setUser(null);
-      setUserRole(null);
-    };
-
-    window.addEventListener('auth-unauthorized', handleUnauthorized);
-    return () => {
-      window.removeEventListener('auth-unauthorized', handleUnauthorized);
-    };
-  }, []);
-
-  // Fetch summary stats when authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetch('/api/stats/summary')
-        .then((res) => res.json())
-        .then((data) => setSummaryStats(data))
-        .catch((err) => console.error('Stats sync error:', err));
-    }
-  }, [isAuthenticated, activeTab]);
-
-
+    fetch('/api/stats/summary')
+      .then((res) => res.json())
+      .then((data) => setSummaryStats(data))
+      .catch((err) => console.error('Stats sync error:', err));
+  }, [activeTab]);
 
   const handleSelectRole = (role) => {
     setUserRole(role);
@@ -150,11 +75,8 @@ export default function App() {
     setUserRole(null); // Triggers PortalSelectionModal
   };
 
-  const handleLogout = async () => {
-    localStorage.removeItem('road_guardian_token');
+  const handleLogout = () => {
     sessionStorage.removeItem('road_guardian_role');
-    setIsAuthenticated(false);
-    setUser(null);
     setUserRole(null);
     setShowProfileModal(false);
   };
@@ -222,52 +144,12 @@ export default function App() {
     </div>
   );
 
-  if (isAuthLoading) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '16px', background: '#09090b' }}>
-        <Loader size={36} className="animate-spin" color="#00E6B4" />
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ color: '#f4f4f5', fontFamily: 'Space Grotesk, sans-serif', fontSize: '0.95rem', fontWeight: 600, letterSpacing: '0.5px' }}>
-            Initializing Road Guardian AI...
-          </p>
-          <p style={{ color: '#71717a', fontSize: '0.78rem', marginTop: '4px' }}>
-            Authenticating security credentials
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // 1. If not authenticated, render the AuthPortal
-  if (!isAuthenticated) {
-    const params = new URLSearchParams(window.location.search);
-    const action = params.get('action');
-    const actionToken = params.get('token');
-    
-    return (
-      <AuthPortal 
-        onAuthSuccess={(loggedInUser) => {
-          setUser(loggedInUser);
-          setIsAuthenticated(true);
-          if (loggedInUser.role === 'admin') {
-            setUserRole(null); // Force admin to select portal
-          } else {
-            handleSelectRole('public'); // Public users go directly to citizen portal
-          }
-        }}
-        initialAction={action}
-        initialToken={actionToken}
-      />
-    );
-  }
-
-  // 2. If authenticated but portal role is not selected yet, render PortalSelectionModal
+  // If portal role is not selected yet, render PortalSelectionModal
   if (userRole === null) {
     return (
       <PortalSelectionModal 
         user={user}
         onSelectRole={handleSelectRole}
-        onLogout={handleLogout}
       />
     );
   }

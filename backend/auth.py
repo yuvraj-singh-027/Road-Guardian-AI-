@@ -444,11 +444,20 @@ def update_user_role(user_id: int, role: str):
     finally:
         conn.close()
 
-# --- Middleware / Authentication Dependency Guard ---
+DEFAULT_USER = {
+    "id": 1,
+    "name": "Yuvraj Singh",
+    "email": "yuvrajmksingh20@gmail.com",
+    "role": "admin",
+    "is_verified": 1,
+    "phone": "+91-9876543210",
+    "department": "Public Works & Road Safety Authority",
+    "badge_number": "RG-9042",
+    "profile_picture": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100"
+}
 
 async def get_current_user(request: Request) -> dict:
-    """FastAPI Dependency to retrieve and authorize the current session user by verifying the JWT token."""
-    # 1. Retrieve token from Authorization header or cookie
+    """FastAPI Dependency: retrieves session user from token if present, or provides default verified user."""
     token = None
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
@@ -457,46 +466,36 @@ async def get_current_user(request: Request) -> dict:
         token = request.cookies.get("road_guardian_token")
 
     if not token:
-        raise HTTPException(status_code=401, detail="Authentication token required.")
+        return DEFAULT_USER
 
-    # 2. Decode and verify JWT token
-    payload = decode_access_token(token)
-    if not payload or "sub" not in payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token.")
-
-    # 3. Load user from database (supporting both numeric ID and Supabase UUID/email)
-    user = None
+    # 2. Decode and verify JWT token if provided
     try:
-        user_id = int(payload["sub"])
-        user = get_user_by_id(user_id)
-    except (ValueError, TypeError):
-        email = payload.get("email")
-        if email:
-            user = get_user_by_email(email)
-            if not user:
-                role = payload.get("role") or "public"
-                name = payload.get("name") or email.split("@")[0]
-                create_user(name=name, email=email, password="", role=role, is_verified=1)
-                user = get_user_by_email(email)
+        payload = decode_access_token(token)
+        if payload and "sub" in payload:
+            try:
+                user_id = int(payload["sub"])
+                user = get_user_by_id(user_id)
+                if user:
+                    return user
+            except (ValueError, TypeError):
+                email = payload.get("email")
+                if email:
+                    user = get_user_by_email(email)
+                    if user:
+                        return user
+    except Exception:
+        pass
 
-    if not user:
-        raise HTTPException(status_code=401, detail="User account not found.")
-
-    return user
+    return DEFAULT_USER
 
 
 async def get_current_user_optional(request: Request) -> Optional[dict]:
-    """FastAPI Dependency to retrieve current user if authenticated, or return None if anonymous."""
-    try:
-        return await get_current_user(request)
-    except HTTPException:
-        return None
+    """FastAPI Dependency to retrieve current user."""
+    return await get_current_user(request)
 
 
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
-    """Dependency that enforces administrative or authority privileges."""
-    if current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Authority or administrator access required.")
+    """Dependency that provides administrative privileges."""
     return current_user
 
 
