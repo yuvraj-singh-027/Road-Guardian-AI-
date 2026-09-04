@@ -40,7 +40,7 @@ JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 24 hours
 
 # Frontend Redirect URL
-FRONTEND_URL = os.getenv("FRONTEND_URL") or "http://localhost:3000"
+FRONTEND_URL = os.getenv("FRONTEND_URL", "")
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -259,7 +259,8 @@ def send_email(to_email: str, subject: str, body_html: str, fallback_link: str):
     print(f"{border}\n")
 
 def send_verification_email(name: str, email: str, token: str):
-    link = f"http://localhost:8000/api/auth/verify-email?token={token}"
+    backend_base = (os.getenv("BACKEND_URL") or os.getenv("RENDER_EXTERNAL_URL") or os.getenv("FRONTEND_URL") or "").rstrip("/")
+    link = f"{backend_base}/api/auth/verify-email?token={token}" if backend_base else f"/api/auth/verify-email?token={token}"
     subject = "Verify Your Road Guardian Account"
     html = f"""
     <html>
@@ -281,7 +282,8 @@ def send_verification_email(name: str, email: str, token: str):
 
 def send_password_reset_email(name: str, email: str, token: str):
     # Frontend handles password reset views via query params
-    link = f"{FRONTEND_URL}/?action=reset-password&token={token}"
+    frontend_base = (os.getenv("FRONTEND_URL") or "").rstrip("/")
+    link = f"{frontend_base}/?action=reset-password&token={token}" if frontend_base else f"/?action=reset-password&token={token}"
     subject = "Reset Your Road Guardian Password"
     html = f"""
     <html>
@@ -906,7 +908,7 @@ async def google_status():
     return {"configured": bool(client_id)}
 
 @router.get("/google/login")
-async def google_standard_login(request: Request):
+async def google_standard_login(request: Request, redirect_origin: Optional[str] = None):
     """Redirects user to Google Consent screen if keys exist, otherwise returns error indicating sandbox required."""
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI") or f"{request.url.scheme}://{request.url.netloc}/api/auth/google/callback"
@@ -918,31 +920,48 @@ async def google_standard_login(request: Request):
             detail="GOOGLE_OAUTH_KEYS_NOT_CONFIGURED"
         )
         
+    import urllib.parse
+    target_origin = redirect_origin or request.headers.get("origin") or request.headers.get("referer") or os.getenv("FRONTEND_URL") or str(request.base_url).rstrip("/")
+    if target_origin and "?" in target_origin:
+        target_origin = target_origin.split("?")[0].rstrip("/")
+    state_param = urllib.parse.quote(target_origin.rstrip("/"))
+
     google_auth_url = (
         "https://accounts.google.com/o/oauth2/v2/auth?"
         "response_type=code&"
         f"client_id={client_id}&"
         f"redirect_uri={redirect_uri}&"
         "scope=openid%20email%20profile&"
+        f"state={state_param}&"
         "prompt=select_account"
     )
     return RedirectResponse(google_auth_url)
 
 @router.get("/google/callback")
-async def google_standard_callback(code: str, request: Request, response: Response):
+async def google_standard_callback(code: str, request: Request, response: Response, state: Optional[str] = None):
     """Exchanges code for Google user details and issues a valid app JWT."""
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI") or f"{request.url.scheme}://{request.url.netloc}/api/auth/google/callback"
 
-    if not client_id or not client_secret:
-        raise HTTPException(status_code=500, detail="Google OAuth configuration missing on server.")
-
-    # 1. Exchange auth code for tokens
     import urllib.request
     import json
     import urllib.parse
-    
+
+    # Resolve target frontend site URL from state or environment
+    target_frontend = os.getenv("FRONTEND_URL")
+    if state:
+        try:
+            target_frontend = urllib.parse.unquote(state).rstrip("/")
+        except Exception:
+            pass
+    if not target_frontend:
+        target_frontend = str(request.base_url).rstrip("/")
+
+    if not client_id or not client_secret:
+        return RedirectResponse(f"{target_frontend}/?error=google_oauth_keys_missing")
+
+    # 1. Exchange auth code for tokens
     try:
         token_url = "https://oauth2.googleapis.com/token"
         data = urllib.parse.urlencode({
@@ -1004,15 +1023,15 @@ async def google_standard_callback(code: str, request: Request, response: Respon
                 user = get_user_by_id(user_id)
                 
         # 4. Issue JWT
-        token = create_access_token({"sub": str(user["id"]), "role": user["role"]})
+        token = create_access_token({"sub": str(user["id"]), "role": user["role"], "email": user["email"]})
         
         # Redirect user back to React frontend dashboard with token parameter
-        redirect_target = f"{FRONTEND_URL}/?token={token}"
+        redirect_target = f"{target_frontend}/?token={token}"
         return RedirectResponse(redirect_target)
         
     except Exception as e:
         print(f"[GOOGLE OAUTH CALLBACK ERROR]: {e}")
-        return RedirectResponse(f"{FRONTEND_URL}/?error=google_auth_failed")
+        return RedirectResponse(f"{target_frontend}/?error=google_auth_failed")
 
 @router.get("/google/debug")
 async def google_debug():

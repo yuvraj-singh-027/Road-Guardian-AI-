@@ -193,7 +193,7 @@ if _env_path.exists():
                 _k, _v = _line.split("=", 1)
                 os.environ[_k.strip()] = _v.strip()
 
-# Enable CORS for React Frontend
+# Enable CORS for React Frontend and deployed environments
 cors_origins = [
     "http://localhost:3000",
     "http://localhost:5173",
@@ -210,6 +210,7 @@ if frontend_url:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

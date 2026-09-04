@@ -3,13 +3,12 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 
-// Global fetch interceptor to handle cross-origin API calls only if an external VITE_API_URL is configured
+// Global fetch interceptor to handle cross-origin API calls when VITE_API_URL is configured
 const originalFetch = window.fetch;
 window.fetch = (url, options) => {
-  const customApiUrl = import.meta.env.VITE_API_URL || '';
+  const customApiUrl = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
   if (typeof url === 'string') {
-    // If backend URL is set explicitly to remote backend in production
-    if (customApiUrl && !customApiUrl.includes('localhost') && !customApiUrl.includes('127.0.0.1') && url.startsWith('/api/')) {
+    if (customApiUrl && url.startsWith('/api/')) {
       url = `${customApiUrl}${url}`;
     }
   }

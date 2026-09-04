@@ -1,11 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Retrieve Supabase config from Vite environment variables with robust fallback
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://cnotwpnmkfskcscsovep.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_fe07dio5v0Vpm006J71SUw_tv1iQuUQ';
+// Retrieve Supabase config from Vite environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-// Create and export Supabase client instance if configured
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+// Valid keys for supabase start with 'eyJ'
+const isValidKey = Boolean(
+  supabaseUrl && 
+  supabaseUrl.startsWith('http') && 
+  supabaseAnonKey && 
+  supabaseAnonKey.startsWith('eyJ')
+);
+
+export const isSupabaseConfigured = Boolean(isValidKey);
 
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
@@ -18,3 +25,4 @@ export const supabase = isSupabaseConfigured
   : null;
 
 export default supabase;
+

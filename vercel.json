@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:match*",
+      "destination": "https://road-guardian-ai-5.onrender.com/api/:match*"
+    }
+  ]
+}

@@ -295,21 +295,10 @@ export default function AIDetectionView({ userRole = 'public', user, onNavigateT
     }
 
     try {
-      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const backendBase = import.meta.env.VITE_API_URL || (isLocal ? 'http://localhost:8000' : '');
-      
-      let response;
-      try {
-        response = await fetch(`${backendBase}/api/detect/image`, {
-          method: 'POST',
-          body: formData,
-        });
-      } catch (networkErr) {
-        response = await fetch('/api/detect/image', {
-          method: 'POST',
-          body: formData,
-        });
-      }
+      let response = await fetch('/api/detect/image', {
+        method: 'POST',
+        body: formData,
+      });
 
       let data = null;
       try {

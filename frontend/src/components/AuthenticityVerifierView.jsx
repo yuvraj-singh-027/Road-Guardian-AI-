@@ -214,18 +214,10 @@ export default function AuthenticityVerifierView({ onNavigateToDetection, initia
     }
 
     try {
-      let res;
-      try {
-        res = await fetch('/api/authenticity/analyze', {
-          method: 'POST',
-          body: formData,
-        });
-      } catch (err) {
-        res = await fetch('http://localhost:8000/api/authenticity/analyze', {
-          method: 'POST',
-          body: formData,
-        });
-      }
+      const res = await fetch('/api/authenticity/analyze', {
+        method: 'POST',
+        body: formData,
+      });
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));

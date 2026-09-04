@@ -1,6 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { Activity, Mail, Lock, User, ArrowRight, ShieldCheck, AlertCircle, Loader, KeyRound, CheckCircle2, ChevronLeft, Zap, X } from 'lucide-react';
-import { supabase, isSupabaseConfigured } from '../supabaseClient';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export default function AuthPortal({ onAuthSuccess, onClose, initialAction, initialToken }) {
   const [view, setView] = useState(initialAction === 'admin-login' ? 'login' : (initialAction || 'login'));
@@ -60,7 +58,7 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
     setLoading(true);
     setErrorMsg('');
     try {
-      const res = await fetch(`/api/auth/verify-email?token=${verifyToken}`);
+      const res = await fetch(`${API_BASE}/api/auth/verify-email?token=${verifyToken}`);
       if (res.ok) {
         setSuccessMsg('Email verified successfully! You can now log into your account.');
       } else {
@@ -88,28 +86,32 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
     try {
       // 1. Authenticate with Supabase Auth if configured
       if (isSupabaseConfigured && supabase) {
-        const { data: supaData, error: supaError } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
+        try {
+          const { data: supaData, error: supaError } = await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password,
+          });
 
-        if (!supaError && supaData?.session) {
-          const supaUser = {
-            id: supaData.user.id,
-            name: supaData.user.user_metadata?.name || supaData.user.user_metadata?.full_name || email.split('@')[0],
-            email: supaData.user.email,
-            role: supaData.user.user_metadata?.role || 'public',
-            token: supaData.session.access_token,
-          };
-          localStorage.setItem('road_guardian_token', supaData.session.access_token);
-          sessionStorage.setItem('road_guardian_role', supaUser.role);
-          onAuthSuccess(supaUser);
-          return;
+          if (!supaError && supaData?.session) {
+            const supaUser = {
+              id: supaData.user.id,
+              name: supaData.user.user_metadata?.name || supaData.user.user_metadata?.full_name || email.split('@')[0],
+              email: supaData.user.email,
+              role: supaData.user.user_metadata?.role || (email.toLowerCase() === 'admin@roadguardian.gov' ? 'admin' : 'public'),
+              token: supaData.session.access_token,
+            };
+            localStorage.setItem('road_guardian_token', supaData.session.access_token);
+            sessionStorage.setItem('road_guardian_role', supaUser.role);
+            onAuthSuccess(supaUser);
+            return;
+          }
+        } catch (supaErr) {
+          console.warn('[Supabase Auth Warning]:', supaErr);
         }
       }
 
-      // 2. Fallback to direct backend authentication
-      const res = await fetch('/api/auth/login', {
+      // 2. Direct backend authentication
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password, rememberMe }),
@@ -130,7 +132,7 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
         }
       }
     } catch (err) {
-      setErrorMsg('Network error. Failed to connect to server.');
+      setErrorMsg('Network error. Failed to connect to server. Please check your backend connection.');
     } finally {
       setLoading(false);
     }
@@ -169,27 +171,31 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
     try {
       // 1. Register with Supabase Auth if configured
       if (isSupabaseConfigured && supabase) {
-        const { data: supaData, error: supaError } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: {
-            data: {
-              name: name.trim(),
-              full_name: name.trim(),
-              role: targetRole,
+        try {
+          const { data: supaData, error: supaError } = await supabase.auth.signUp({
+            email: email.trim(),
+            password,
+            options: {
+              data: {
+                name: name.trim(),
+                full_name: name.trim(),
+                role: targetRole,
+              },
             },
-          },
-        });
+          });
 
-        if (!supaError && supaData?.user) {
-          setSuccessMsg('Account created successfully in Supabase! Check your inbox for confirmation.');
-          setView('verify-alert');
-          return;
+          if (!supaError && supaData?.user) {
+            setSuccessMsg('Account created successfully in Supabase! Check your inbox for confirmation.');
+            setView('verify-alert');
+            return;
+          }
+        } catch (supaErr) {
+          console.warn('[Supabase SignUp Warning]:', supaErr);
         }
       }
 
-      // 2. Fallback to direct backend registration
-      const res = await fetch('/api/auth/signup', {
+      // 2. Direct backend registration
+      const res = await fetch(`${API_BASE}/api/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -222,7 +228,7 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
     setErrorMsg('');
     setSuccessMsg('');
     try {
-      const res = await fetch('/api/auth/resend-verification', {
+      const res = await fetch(`${API_BASE}/api/auth/resend-verification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -252,7 +258,7 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
     setSuccessMsg('');
 
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() }),
@@ -289,7 +295,7 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
     setSuccessMsg('');
 
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch(`${API_BASE}/api/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password, confirmPassword }),
@@ -313,25 +319,26 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
     }
   };
 
-  // 7. Supabase Google OAuth Login
+  // 7. Google OAuth Login
   const handleSupabaseGoogleLogin = async () => {
     setLoading(true);
     setErrorMsg('');
     try {
-      if (!isSupabaseConfigured || !supabase) {
-        setErrorMsg('Supabase credentials missing. Check .env configuration.');
-        setLoading(false);
-        return;
-      }
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin,
-        },
-      });
-      if (error) {
-        setErrorMsg(error.message || 'Failed to initialize Google login.');
-        setLoading(false);
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin,
+          },
+        });
+        if (error) {
+          setErrorMsg(error.message || 'Failed to initialize Google login.');
+          setLoading(false);
+        }
+      } else {
+        const backendOrigin = import.meta.env.VITE_API_URL || '';
+        const currentOrigin = encodeURIComponent(window.location.origin);
+        window.location.href = `${backendOrigin}/api/auth/google/login?redirect_origin=${currentOrigin}`;
       }
     } catch (err) {
       setErrorMsg('Error connecting to Google OAuth.');
@@ -439,7 +446,7 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
                   id="remember"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  style={{ accentColor: '#00E6B4', cursor: 'pointer' }}
+                  style={{ accentColor: isAdminMode ? '#F59E0B' : '#00E6B4', cursor: 'pointer' }}
                   disabled={loading}
                 />
                 <label htmlFor="remember" style={{ fontSize: '0.8rem', color: '#a1a1aa', cursor: 'pointer', userSelect: 'none' }}>
@@ -447,38 +454,68 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
                 </label>
               </div>
 
-              <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '12px' }} disabled={loading}>
-                {loading ? <Loader size={18} className="animate-spin" /> : 'Log In'}
-              </button>
-
-              <div style={{ margin: '16px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-                <span style={{ height: '1px', background: '#27272a', flex: 1 }}></span>
-                <span style={{ fontSize: '0.72rem', color: '#71717a', textTransform: 'uppercase' }}>or continue with</span>
-                <span style={{ height: '1px', background: '#27272a', flex: 1 }}></span>
-              </div>
-
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={handleSupabaseGoogleLogin}
-                style={{ width: '100%', justifyContent: 'center', padding: '11px', gap: '10px', fontSize: '0.85rem' }}
+              <button 
+                type="submit" 
+                className="btn-primary" 
+                style={{ 
+                  width: '100%', 
+                  justifyContent: 'center', 
+                  padding: '12px',
+                  background: isAdminMode ? '#F59E0B' : undefined,
+                  color: isAdminMode ? '#09090b' : undefined,
+                  fontWeight: 600
+                }} 
                 disabled={loading}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-                </svg>
-                Continue with Google
+                {loading ? <Loader size={18} className="animate-spin" /> : (isAdminMode ? 'Log In to Authority Portal' : 'Log In')}
               </button>
 
-              <div style={{ marginTop: '20px', fontSize: '0.82rem', color: '#a1a1aa', textAlign: 'center' }}>
-                Don't have an account?{' '}
-                <span onClick={() => switchView('signup')} style={{ color: '#00E6B4', cursor: 'pointer', fontWeight: 600 }}>
-                  Sign Up
-                </span>
-              </div>
+              {/* In Admin Mode: Strict Email & Password ONLY (no external providers, no signup) */}
+              {isAdminMode ? (
+                <div style={{ marginTop: '20px', fontSize: '0.8rem', color: '#71717a', textAlign: 'center' }}>
+                  Need Public Citizen access?{' '}
+                  <span 
+                    onClick={() => {
+                      setIsAdminMode(false);
+                      switchView('login');
+                    }} 
+                    style={{ color: '#00E6B4', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Citizen Portal Login
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <div style={{ margin: '16px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                    <span style={{ height: '1px', background: '#27272a', flex: 1 }}></span>
+                    <span style={{ fontSize: '0.72rem', color: '#71717a', textTransform: 'uppercase' }}>or continue with</span>
+                    <span style={{ height: '1px', background: '#27272a', flex: 1 }}></span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={handleSupabaseGoogleLogin}
+                    style={{ width: '100%', justifyContent: 'center', padding: '11px', gap: '10px', fontSize: '0.85rem' }}
+                    disabled={loading}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                    Continue with Google
+                  </button>
+
+                  <div style={{ marginTop: '20px', fontSize: '0.82rem', color: '#a1a1aa', textAlign: 'center' }}>
+                    Don't have an account?{' '}
+                    <span onClick={() => switchView('signup')} style={{ color: '#00E6B4', cursor: 'pointer', fontWeight: 600 }}>
+                      Sign Up
+                    </span>
+                  </div>
+                </>
+              )}
             </form>
           )}
 

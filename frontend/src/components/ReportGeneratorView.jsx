@@ -147,20 +147,11 @@ export default function ReportGeneratorView() {
     const payload = getPayload();
 
     try {
-      let response;
-      try {
-        response = await fetch('/api/report/pdf', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      } catch (err) {
-        response = await fetch('http://localhost:8000/api/report/pdf', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      }
+      const response = await fetch('/api/report/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
       if (!response || !response.ok) {
         throw new Error('PDF Generation Failed');
@@ -193,20 +184,11 @@ export default function ReportGeneratorView() {
     const payload = getPayload();
 
     try {
-      let response;
-      try {
-        response = await fetch('/api/report/transmit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      } catch (err) {
-        response = await fetch('http://localhost:8000/api/report/transmit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      }
+      const response = await fetch('/api/report/transmit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
       if (!response || !response.ok) {
         throw new Error('Transmission Failed');
