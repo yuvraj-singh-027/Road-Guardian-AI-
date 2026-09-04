@@ -41,14 +41,14 @@ export default function ReportGeneratorView() {
     setIsClearing(true);
     setDbMessage('');
     try {
-      const token = localStorage.getItem('rg_token');
+      const token = localStorage.getItem('road_guardian_token') || localStorage.getItem('rg_token');
       const headers = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch('/api/admin/clear-db', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ passcode: dbPasscode })
+        body: JSON.stringify({ passcode: dbPasscode || '' })
       });
       const data = await res.json();
       if (res.ok) {

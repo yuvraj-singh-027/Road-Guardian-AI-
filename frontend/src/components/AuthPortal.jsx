@@ -3,26 +3,33 @@ import { Activity, Mail, Lock, User, ArrowRight, ShieldCheck, AlertCircle, Loade
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 
 export default function AuthPortal({ onAuthSuccess, onClose, initialAction, initialToken }) {
-  const [view, setView] = useState('login'); // login | signup | forgot | reset | verify
+  const [view, setView] = useState(initialAction === 'admin-login' ? 'login' : (initialAction || 'login'));
+  const [isAdminMode, setIsAdminMode] = useState(initialAction === 'admin-login');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   // Form Fields
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(initialAction === 'admin-login' ? 'admin@roadguardian.gov' : '');
+  const [password, setPassword] = useState(initialAction === 'admin-login' ? 'Admin@2026!' : '');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [adminPasscode, setAdminPasscode] = useState('');
-  const [showAdminField, setShowAdminField] = useState(false);
+  const [showAdminField, setShowAdminField] = useState(initialAction === 'admin-login');
 
   // Verification & Reset states
   const [token, setToken] = useState('');
 
   useEffect(() => {
-    if (initialAction) {
+    if (initialAction === 'admin-login') {
+      setView('login');
+      setIsAdminMode(true);
+      setEmail('admin@roadguardian.gov');
+      setPassword('Admin@2026!');
+    } else if (initialAction) {
       setView(initialAction);
+      setIsAdminMode(false);
     }
     if (initialToken) {
       setToken(initialToken);
@@ -37,13 +44,16 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
     setView(newView);
     setErrorMsg('');
     setSuccessMsg('');
-    setEmail('');
-    setPassword('');
+    if (!isAdminMode) {
+      setEmail('');
+      setPassword('');
+    }
     setConfirmPassword('');
     setName('');
     setAdminPasscode('');
     setShowAdminField(false);
   };
+
 
   // 1. Email Verification Trigger
   const handleEmailVerification = async (verifyToken) => {
@@ -367,6 +377,17 @@ export default function AuthPortal({ onAuthSuccess, onClose, initialAction, init
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#10B981', fontSize: '0.8rem', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px', textAlign: 'left' }}>
               <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
               <div>{successMsg}</div>
+            </div>
+          )}
+
+          {isAdminMode && (
+            <div style={{ padding: '12px 14px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px', marginBottom: '16px', textAlign: 'left' }}>
+              <div style={{ color: '#F59E0B', fontWeight: 700, fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <ShieldCheck size={15} /> Authority Control Room Authentication
+              </div>
+              <div style={{ color: '#d4d4d8', fontSize: '0.74rem', marginTop: '4px' }}>
+                Official Admin Email: <strong style={{ color: '#fff' }}>admin@roadguardian.gov</strong> | Password: <strong style={{ color: '#fff' }}>Admin@2026!</strong>
+              </div>
             </div>
           )}
 

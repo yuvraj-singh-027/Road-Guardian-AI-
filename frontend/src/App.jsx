@@ -47,6 +47,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authInitialAction, setAuthInitialAction] = useState('login');
   const [userRole, setUserRole] = useState(() => sessionStorage.getItem('road_guardian_role') || null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -58,11 +59,12 @@ export default function App() {
     if (isSupabaseConfigured && supabase) {
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
+          const detectedRole = session.user.user_metadata?.role || (session.user.email?.toLowerCase() === 'admin@roadguardian.gov' ? 'admin' : 'public');
           setUser({
             id: session.user.id,
             name: session.user.user_metadata?.name || session.user.user_metadata?.full_name || session.user.email.split('@')[0],
             email: session.user.email,
-            role: session.user.user_metadata?.role || 'public',
+            role: detectedRole,
           });
           localStorage.setItem('road_guardian_token', session.access_token);
         }
@@ -70,11 +72,12 @@ export default function App() {
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session?.user) {
+          const detectedRole = session.user.user_metadata?.role || (session.user.email?.toLowerCase() === 'admin@roadguardian.gov' ? 'admin' : 'public');
           setUser({
             id: session.user.id,
             name: session.user.user_metadata?.name || session.user.user_metadata?.full_name || session.user.email.split('@')[0],
             email: session.user.email,
-            role: session.user.user_metadata?.role || 'public',
+            role: detectedRole,
           });
           localStorage.setItem('road_guardian_token', session.access_token);
         }
@@ -93,10 +96,16 @@ export default function App() {
   }, [activeTab]);
 
   const handleSelectRole = (role) => {
+    if (role === 'admin' && (!user || user.role !== 'admin')) {
+      setAuthInitialAction('admin-login');
+      setShowAuthModal(true);
+      return;
+    }
     setUserRole(role);
     sessionStorage.setItem('road_guardian_role', role);
     setActiveTab(role === 'admin' ? 'digital-twin' : 'detection');
   };
+
 
   const handleSwitchPortal = () => {
     sessionStorage.removeItem('road_guardian_role');
@@ -183,10 +192,14 @@ export default function App() {
         <PortalSelectionModal 
           user={user}
           onSelectRole={handleSelectRole}
-          onOpenAuth={() => setShowAuthModal(true)}
+          onOpenAuth={(mode) => {
+            setAuthInitialAction(mode || 'login');
+            setShowAuthModal(true);
+          }}
         />
         {showAuthModal && (
           <AuthPortal
+            initialAction={authInitialAction}
             onAuthSuccess={(loggedInUser) => {
               setUser(loggedInUser);
               setShowAuthModal(false);

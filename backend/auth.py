@@ -444,6 +444,33 @@ def update_user_role(user_id: int, role: str):
     finally:
         conn.close()
 
+def ensure_admin_user_exists():
+    """Guarantees the designated Authority Admin account (admin@roadguardian.gov) exists with role: 'admin'."""
+    try:
+        admin_user = get_user_by_email("admin@roadguardian.gov")
+        if not admin_user:
+            create_user(
+                name="Municipal Authority Administrator",
+                email="admin@roadguardian.gov",
+                password="Admin@2026!",
+                role="admin",
+                is_verified=1
+            )
+            print("[AUTH] Successfully seeded Authority Admin account: admin@roadguardian.gov")
+        else:
+            if admin_user.get("role") != "admin":
+                update_user_role(admin_user["id"], "admin")
+                print("[AUTH] Upgraded admin@roadguardian.gov to role: 'admin'")
+    except Exception as ex:
+        print(f"[AUTH] Notice during admin user check: {ex}")
+
+# Auto-seed on startup
+try:
+    ensure_admin_user_exists()
+except Exception:
+    pass
+
+
 DEFAULT_USER = {
     "id": 1,
     "name": "Public Citizen",

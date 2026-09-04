@@ -1532,16 +1532,7 @@ class ClearDBRequest(BaseModel):
     passcode: Optional[str] = ""
 
 @app.post("/api/admin/clear-db")
-def clear_db_compat(req: Optional[ClearDBRequest] = None, request: Request = None):
-    provided_passcode = (req.passcode if req and req.passcode else "").strip().lower()
-    valid_passcodes = {"admin123", "admin@roadguardian2026", "admin", ""}
-    
-    if provided_passcode and provided_passcode not in valid_passcodes:
-        raise HTTPException(
-            status_code=403, 
-            detail="Invalid Admin Passcode. Please enter 'Admin123'."
-        )
-
+def clear_db_compat(req: Optional[ClearDBRequest] = None, current_user: Optional[dict] = Depends(get_current_user_optional)):
     success, msg = clear_all_detections()
     if success:
         return {"success": True, "message": msg}

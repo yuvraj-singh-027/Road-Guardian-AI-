@@ -1,46 +1,58 @@
 import React from 'react';
-import { ShieldAlert, Users, ArrowRight, Activity, CheckCircle2, User as UserIcon, LogIn } from 'lucide-react';
+import { ShieldAlert, Users, ArrowRight, Activity, CheckCircle2, User as UserIcon, LogIn, Lock, ShieldCheck } from 'lucide-react';
 
 export default function PortalSelectionModal({ user, onSelectRole, onOpenAuth }) {
+  const isAdmin = user && user.role === 'admin';
+
   return (
     <div className="portal-overlay">
       <div className="portal-container">
-        {/* User Account Info */}
+        {/* User Account Info Bar */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          background: 'rgba(24, 24, 27, 0.65)',
+          background: 'rgba(24, 24, 27, 0.75)',
           border: '1px solid rgba(255, 255, 255, 0.08)',
           borderRadius: '12px',
-          padding: '10px 16px',
+          padding: '12px 18px',
           marginBottom: '24px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
-              width: '32px',
-              height: '32px',
+              width: '36px',
+              height: '36px',
               borderRadius: '50%',
-              background: 'rgba(0, 230, 180, 0.15)',
+              background: isAdmin ? 'rgba(245, 158, 11, 0.15)' : 'rgba(0, 230, 180, 0.15)',
+              border: isAdmin ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(0, 230, 180, 0.3)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              <UserIcon size={16} color="#00E6B4" />
+              {isAdmin ? <ShieldCheck size={18} color="#F59E0B" /> : <UserIcon size={18} color="#00E6B4" />}
             </div>
             <div style={{ textAlign: 'left' }}>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>{user?.name || 'Public Citizen (Guest)'}</div>
-              <div style={{ fontSize: '0.72rem', color: '#a1a1aa' }}>{user?.email || 'Not Logged In — Click Sign In'}</div>
+              <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {user?.name || (user?.email ? user.email.split('@')[0] : 'Public Citizen (Guest)')}
+                {isAdmin && (
+                  <span style={{ fontSize: '0.66rem', background: '#F59E0B', color: '#09090b', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                    AUTHORITY ADMIN
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: '0.74rem', color: user?.email ? '#00E6B4' : '#a1a1aa' }}>
+                {user?.email || 'Guest Mode — Sign in for full civic record tracking'}
+              </div>
             </div>
           </div>
 
           {onOpenAuth && (
             <button
-              onClick={onOpenAuth}
+              onClick={() => onOpenAuth('login')}
               className="btn-secondary"
-              style={{ fontSize: '0.75rem', padding: '6px 12px', gap: '6px' }}
+              style={{ fontSize: '0.75rem', padding: '7px 14px', gap: '6px' }}
             >
-              <LogIn size={13} color="#00E6B4" /> Sign In / Register (Supabase)
+              <LogIn size={13} color="#00E6B4" /> {user ? 'Switch Account' : 'Sign In / Register'}
             </button>
           )}
         </div>
@@ -80,8 +92,20 @@ export default function PortalSelectionModal({ user, onSelectRole, onOpenAuth })
           </div>
 
           {/* Road Infrastructure Authority Card */}
-          <div className="portal-card admin-card" onClick={() => onSelectRole('admin')}>
-            <div className="portal-card-badge admin-badge">Authority Control Room</div>
+          <div 
+            className="portal-card admin-card" 
+            onClick={() => {
+              if (isAdmin) {
+                onSelectRole('admin');
+              } else {
+                if (onOpenAuth) onOpenAuth('admin-login');
+                else onSelectRole('admin');
+              }
+            }}
+          >
+            <div className="portal-card-badge admin-badge">
+              {isAdmin ? 'Admin Verified' : 'Admin Login Required'}
+            </div>
             <div className="portal-icon-wrapper" style={{ background: 'rgba(245, 158, 11, 0.1)', borderColor: 'rgba(245, 158, 11, 0.25)' }}>
               <ShieldAlert size={28} color="#F59E0B" />
             </div>
@@ -98,7 +122,11 @@ export default function PortalSelectionModal({ user, onSelectRole, onOpenAuth })
               className="btn-primary portal-btn" 
               style={{ width: '100%', marginTop: '14px', background: '#F59E0B', color: '#09090b', fontWeight: 600 }}
             >
-              Enter Authority Portal <ArrowRight size={16} />
+              {isAdmin ? (
+                <>Enter Authority Control Room <ArrowRight size={16} /></>
+              ) : (
+                <><Lock size={15} /> Log In with Admin Email</>
+              )}
             </button>
           </div>
         </div>
