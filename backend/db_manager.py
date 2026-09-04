@@ -760,13 +760,21 @@ def get_user_reports(
             except Exception:
                 lon_val = 77.2090
 
+            eff_email = r.get("reporter_email") or r.get("user_email") or ""
+            eff_name = r.get("user_name")
+            if not eff_name or eff_name in ["Jane Citizen", "Citizen Contributor"]:
+                if eff_email:
+                    eff_name = eff_email.split("@")[0].replace(".", " ").title()
+                else:
+                    eff_name = "Citizen Contributor"
+
             reports.append({
                 "id": rec_id,
                 "report_id": f"RG-{1000 + rec_id}",
                 "user_id": r.get("user_id"),
-                "user_name": r.get("user_name") or "Citizen Contributor",
-                "user_email": r.get("user_email") or r.get("reporter_email") or "",
-                "reporter_email": r.get("user_email") or r.get("reporter_email") or "",
+                "user_name": eff_name,
+                "user_email": eff_email,
+                "reporter_email": eff_email,
                 "image_name": r.get("image_name"),
                 "damage_type": r.get("damage_type") or "Pothole Hazard",
                 "severity": r.get("severity") or "Medium",
@@ -892,13 +900,21 @@ def get_report_by_id_with_history(
         except Exception:
             lon_val = 77.2090
 
+        eff_email = row.get("reporter_email") or row.get("user_email") or ""
+        eff_name = row.get("user_name")
+        if not eff_name or eff_name in ["Jane Citizen", "Citizen Contributor"]:
+            if eff_email:
+                eff_name = eff_email.split("@")[0].replace(".", " ").title()
+            else:
+                eff_name = "Citizen Contributor"
+
         report_obj = {
             "id": row.get("id"),
             "report_id": f"RG-{1000 + row.get('id')}",
             "user_id": row.get("user_id"),
-            "user_name": row.get("user_name") or "Citizen Contributor",
-            "user_email": row.get("user_email") or row.get("reporter_email") or "",
-            "reporter_email": row.get("user_email") or row.get("reporter_email") or "",
+            "user_name": eff_name,
+            "user_email": eff_email,
+            "reporter_email": eff_email,
             "image_name": row.get("image_name"),
             "damage_type": row.get("damage_type") or "Pothole Hazard",
             "severity": row.get("severity") or "Medium",
