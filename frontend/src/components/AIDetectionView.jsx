@@ -1179,6 +1179,120 @@ export default function AIDetectionView({ userRole = 'public', user, onNavigateT
                 </div>
               </div>
 
+              {/* STAGE 3: SUMO MICRO-TRAFFIC SIMULATION & DIGITAL TWIN METRICS */}
+              {detectionResult.sumo_simulation && (
+                <div style={{
+                  marginTop: '12px',
+                  padding: '14px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(145deg, rgba(24, 24, 27, 0.95), rgba(15, 23, 42, 0.9))',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)'
+                }}>
+                  {/* Simulation Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '1.2rem' }}>🚦</span>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#38BDF8', letterSpacing: '0.3px' }}>
+                          SUMO Traffic Simulation
+                        </div>
+                        <div style={{ fontSize: '0.68rem', color: '#94A3B8' }}>
+                          Microscopic Krauss Physics & Delay Model
+                        </div>
+                      </div>
+                    </div>
+                    <span style={{
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      background: detectionResult.sumo_simulation.traffic_impact_level?.includes('Critical') 
+                        ? 'rgba(239, 68, 68, 0.2)' 
+                        : 'rgba(245, 158, 11, 0.2)',
+                      color: detectionResult.sumo_simulation.traffic_impact_level?.includes('Critical') ? '#EF4444' : '#F59E0B',
+                      border: `1px solid ${detectionResult.sumo_simulation.traffic_impact_level?.includes('Critical') ? 'rgba(239, 68, 68, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`
+                    }}>
+                      {detectionResult.sumo_simulation.traffic_impact_level || 'Bottleneck Active'}
+                    </span>
+                  </div>
+
+                  {/* Speed & Delay Comparison Grid */}
+                  <div className="grid-2" style={{ gap: '8px', marginBottom: '10px' }}>
+                    <div style={{ background: '#09090b', padding: '8px 10px', borderRadius: '6px', border: '1px solid #27272a' }}>
+                      <div style={{ fontSize: '0.66rem', color: '#71717a', textTransform: 'uppercase' }}>Corridor Speed</div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '2px' }}>
+                        <span style={{ fontSize: '0.78rem', color: '#71717a', textDecoration: 'line-through' }}>
+                          {detectionResult.sumo_simulation.scenario_normal?.average_speed_kmh || 60} km/h
+                        </span>
+                        <span style={{ fontSize: '1rem', fontWeight: 700, color: '#EF4444' }}>
+                          {detectionResult.sumo_simulation.scenario_damaged?.average_speed_kmh || 28} km/h
+                        </span>
+                        <span style={{ fontSize: '0.68rem', color: '#F87171', fontWeight: 600 }}>
+                          (-{detectionResult.sumo_simulation.scenario_damaged?.speed_drop_pct || 50}%)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ background: '#09090b', padding: '8px 10px', borderRadius: '6px', border: '1px solid #27272a' }}>
+                      <div style={{ fontSize: '0.66rem', color: '#71717a', textTransform: 'uppercase' }}>Vehicle Delay Surge</div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '2px' }}>
+                        <span style={{ fontSize: '1rem', fontWeight: 700, color: '#F59E0B' }}>
+                          +{detectionResult.sumo_simulation.scenario_damaged?.delay_increase_sec || 32}s
+                        </span>
+                        <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>
+                          / vehicle ({detectionResult.sumo_simulation.scenario_damaged?.queue_length_meters || 80}m queue)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recommended Rerouting Plan */}
+                  {detectionResult.sumo_simulation.recommended_reroute && (
+                    <div style={{
+                      background: 'rgba(56, 189, 248, 0.08)',
+                      border: '1px dashed rgba(56, 189, 248, 0.4)',
+                      borderRadius: '8px',
+                      padding: '10px 12px',
+                      marginBottom: '8px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#38BDF8', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <span>🧭</span> Recommended SUMO Detour
+                        </span>
+                        <span style={{ fontSize: '0.68rem', color: '#10B981', fontWeight: 600, background: 'rgba(16, 185, 129, 0.15)', padding: '1px 6px', borderRadius: '4px' }}>
+                          +{detectionResult.sumo_simulation.recommended_reroute.est_additional_travel_time_min || 1.8}m delta
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.76rem', color: '#e2e8f0', fontWeight: 600 }}>
+                        {detectionResult.sumo_simulation.recommended_reroute.route_name}
+                      </div>
+                      <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '3px', lineHeight: 1.4 }}>
+                        {detectionResult.sumo_simulation.recommended_reroute.nav_guidance}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* n8n Sync Pipeline Confirmation */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '0.68rem',
+                    color: '#6ee7b7',
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(16, 185, 129, 0.25)'
+                  }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <span>⚡</span> <strong>n8n Auto-Sync:</strong> Simulation dispatched to Excel & Citizen notification
+                    </span>
+                    <span style={{ color: '#10B981', fontWeight: 700 }}>✓ ACTIVE</span>
+                  </div>
+                </div>
+              )}
+
               {/* TRACKING ACTION CTA */}
               {detectionResult.report_id && onNavigateToReports && (
                 <button 

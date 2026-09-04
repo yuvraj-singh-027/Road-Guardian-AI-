@@ -25,6 +25,7 @@ import math
 try:
     from .risk_engine import calculate_road_risk, check_vulnerable_zone_proximity
     from .traffic_engine import get_default_city_network, simulate_traffic_rerouting
+    from .sumo_engine import simulate_sumo_pothole_impact
     from .report_generator import generate_pdf_report
     from .authenticity_engine import analyze_photo_authenticity
     from .db_manager import (
@@ -38,6 +39,7 @@ except ImportError as e:
     try:
         from risk_engine import calculate_road_risk, check_vulnerable_zone_proximity
         from traffic_engine import get_default_city_network, simulate_traffic_rerouting
+        from sumo_engine import simulate_sumo_pothole_impact
         from report_generator import generate_pdf_report
         from authenticity_engine import analyze_photo_authenticity
         from db_manager import (
@@ -49,6 +51,7 @@ except ImportError as e:
         from n8n_dispatcher import trigger_n8n_event, test_n8n_connection
     except Exception:
         raise RuntimeError(f"Failed to import core engines: {e}")
+
 
 
 # ================== AI HAZARD SCANNER CONFIGURATION & VALIDATION LAYERS ==================
@@ -872,6 +875,18 @@ async def detect_image(
     # Resolve human readable address from coordinates if landmark name not explicitly given
     resolved_landmark = landmark_name.strip() if (landmark_name and landmark_name.strip()) else reverse_geocode_coords(lat, lon)
 
+    # Run SUMO Microscopic Traffic Simulation (Flow, Delay, and Predictive Rerouting)
+    sumo_sim = simulate_sumo_pothole_impact(
+        road_name=resolved_landmark,
+        severity=highest_severity,
+        damage_count=pothole_count,
+        risk_score=float(risk_info.get("score", 75.0)),
+        base_speed_kmh=60.0,
+        base_flow_vph=850,
+        weather="Clear",
+        traffic_density="High" if highest_severity in ["Critical", "High"] else "Moderate"
+    )
+
     # Encode annotated image to JPEG base64
     _, encoded_img = cv2.imencode('.jpg', img_bgr)
     b64_str = base64.b64encode(encoded_img).decode('utf-8')
@@ -952,7 +967,15 @@ async def detect_image(
                     "email": resolved_email,
                     "user_email": resolved_email,
                     "reporter_name": (current_user.get("name") if (current_user and isinstance(current_user, dict) and not submitted_email) else (resolved_email.split('@')[0] if resolved_email else "Citizen Reporter")),
-                    "status": "AI_VERIFIED"
+                    "status": "AI_VERIFIED",
+                    "traffic_simulation": {
+                        "engine": "SUMO / TraCI",
+                        "impact_level": sumo_sim.get("traffic_impact_level"),
+                        "speed_drop_pct": sumo_sim.get("scenario_damaged", {}).get("speed_drop_pct"),
+                        "delay_increase_sec": sumo_sim.get("scenario_damaged", {}).get("delay_increase_sec"),
+                        "recommended_detour": sumo_sim.get("recommended_reroute", {}).get("route_name"),
+                        "detour_time_min": sumo_sim.get("recommended_reroute", {}).get("est_additional_travel_time_min")
+                    }
                 })
             else:
                 print(f"[n8n Dispatcher] Suppressed — DB rejected or insert failed ({db_insert_msg}), no notification sent.")
@@ -974,6 +997,7 @@ async def detect_image(
         print(f"  - Class detected: {raw_cls} | Confidence score: {raw_conf:.3f}")
     print(f"Number of valid detections: {pothole_count}")
     print(f"Database Saved: {db_saved} (Report ID: {logged_report_id})")
+    print(f"SUMO Traffic Impact: {sumo_sim.get('traffic_impact_level')}")
     print(f"Final decision: {final_result_message}")
     print("="*45 + "\n")
 
@@ -987,6 +1011,7 @@ async def detect_image(
         "highest_severity": highest_severity,
         "detections": boxes_list,
         "risk_assessment": risk_info,
+        "sumo_simulation": sumo_sim,
         "authenticity": authenticity_info,
         "is_fake": is_fake,
         "rejection_reason": rejection_reason,
