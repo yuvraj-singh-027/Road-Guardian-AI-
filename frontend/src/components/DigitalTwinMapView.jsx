@@ -2,10 +2,10 @@ import React, { useEffect, useState, useRef } from 'react';
 import * as maptilersdk from '@maptiler/sdk';
 import "@maptiler/sdk/dist/maptiler-sdk.css";
 import { 
-  AlertCircle, Navigation, Activity, BarChart2, PieChart as PieIcon, 
+  Navigation, Activity, BarChart2, PieChart as PieIcon, 
   Loader, RefreshCw, Sliders, TrendingDown, Clock, Wind, ArrowRight,
   Compass, AlertTriangle, ShieldCheck, Zap, Layers, MapPin, CheckCircle2,
-  Share2
+  Share2, AlertOctagon, Cpu, Info
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid, Cell } from 'recharts';
 
@@ -19,21 +19,28 @@ const getRiskColor = (severity) => {
   }
 };
 
-export default function DigitalTwinMapView({ onNavigateToReroute }) {
+export default function DigitalTwinMapView() {
   const [network, setNetwork] = useState([]);
   const [selectedRoad, setSelectedRoad] = useState(null);
   const [potholesList, setPotholesList] = useState([]);
   const [activePothole, setActivePothole] = useState(null);
-  const [potholeSimResult, setPotholeSimResult] = useState(null);
-  const [isSimulating, setIsSimulating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showRoadNetwork, setShowRoadNetwork] = useState(true);
-  
-  // Interactive repair closure simulation parameters
-  const [simClosureType, setSimClosureType] = useState('single_lane'); // 'full' | 'single_lane'
-  const [simTrafficWindow, setSimTrafficWindow] = useState('peak');
-  const [simDurationHours, setSimDurationHours] = useState(3);
-  const [activeTab, setActiveTab] = useState('sumo'); // 'sumo' | 'repair' | 'telemetry'
+
+  // Active view mode in right telemetry deck: 'sumo' (Pothole Bottleneck) | 'network-reroute' (Network Simulation) | 'segment-info' (Road Telemetry)
+  const [activeTab, setActiveTab] = useState('sumo');
+
+  // SUMO Microscopic Pothole Simulation State
+  const [potholeSimResult, setPotholeSimResult] = useState(null);
+  const [isSimulatingPothole, setIsSimulatingPothole] = useState(false);
+
+  // Network Rerouting Simulation Engine State (Merged from TrafficRerouteView)
+  const [closedRoadId, setClosedRoadId] = useState('Sec1_Blvd_N1');
+  const [closureType, setClosureType] = useState('full'); // 'full' or 'single_lane'
+  const [trafficWindow, setTrafficWindow] = useState('peak'); // 'peak', 'normal', 'off_peak'
+  const [durationHours, setDurationHours] = useState(4);
+  const [networkSimResult, setNetworkSimResult] = useState(null);
+  const [isSimulatingNetwork, setIsSimulatingNetwork] = useState(false);
 
   // Map engine states
   const [mapError, setMapError] = useState(null);
@@ -46,7 +53,7 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
   const leafletPolylinesRef = useRef({});
   const leafletMarkersRef = useRef([]);
 
-  // Default sample fallback hazards if database has no entries
+  // Sample fallback hazards
   const sampleFallback = [
     { id: 101, Image: 'pothole_kasturba_gandhi.jpg', Landmark: 'Kasturba Gandhi Marg, Connaught Place', Latitude: 28.6258, Longitude: 77.2205, Severity: 'High', Risk_Score: 84.2 },
     { id: 102, Image: 'pothole_barakhamba.jpg', Landmark: 'Barakhamba Road, Near Metro Gate 2', Latitude: 28.6295, Longitude: 77.2285, Severity: 'Medium', Risk_Score: 58.0 },
@@ -55,7 +62,7 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
     { id: 105, Image: 'pothole_janpath.jpg', Landmark: 'Janpath Road, Near Cottage Industries', Latitude: 28.6210, Longitude: 77.2185, Severity: 'High', Risk_Score: 79.4 }
   ];
 
-  // 1. Fetch road segments network & reported potholes on mount
+  // 1. Initial Data Fetching
   useEffect(() => {
     Promise.all([
       fetch('/api/traffic/network').then(r => r.json()).catch(() => ({ segments: [] })),
@@ -63,6 +70,12 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
     ]).then(([netData, detData]) => {
       const segs = netData.segments || [];
       setNetwork(segs);
+
+      if (segs.length > 0) {
+        setClosedRoadId(segs[0].id);
+        setSelectedRoad(segs[0]);
+        runNetworkSimulation(segs[0].id, closureType, trafficWindow, durationHours);
+      }
 
       const rawDetections = (detData.success && detData.detections && detData.detections.length > 0)
         ? detData.detections
@@ -73,28 +86,25 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
       );
       setPotholesList(validPotholes);
 
-      // Default to the highest severity pothole
       if (validPotholes.length > 0) {
         const topHazard = validPotholes.find(p => p.Severity === 'Critical') || validPotholes[0];
         triggerSumoSimulation(topHazard);
-      } else if (segs.length > 0) {
-        setSelectedRoad(segs[0]);
       }
+
       setLoading(false);
     }).catch(err => {
-      console.error('Initialization error in DigitalTwinMapView:', err);
+      console.error('Initialization error in Unified Digital Twin:', err);
       setLoading(false);
     });
   }, []);
 
-  // 2. Trigger SUMO Traffic Simulator for a specific pothole
+  // 2. Trigger SUMO Traffic Simulator for a Specific Pothole
   const triggerSumoSimulation = async (pothole) => {
     setActivePothole(pothole);
-    setSelectedRoad(null);
-    setIsSimulating(true);
+    setIsSimulatingPothole(true);
     setActiveTab('sumo');
 
-    // Pan map camera to the hazard
+    // Pan map camera to the hazard coordinates
     const lat = parseFloat(pothole.Latitude);
     const lon = parseFloat(pothole.Longitude);
     if (!isNaN(lat) && !isNaN(lon)) {
@@ -130,14 +140,13 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
         const data = await response.json();
         setPotholeSimResult(data);
       } else {
-        // Fallback calculation if backend route fails
         setPotholeSimResult(generateClientSumoFallback(pothole));
       }
     } catch (e) {
-      console.warn('SUMO simulate request fallback:', e);
+      console.warn('SUMO simulation fallback:', e);
       setPotholeSimResult(generateClientSumoFallback(pothole));
     } finally {
-      setIsSimulating(false);
+      setIsSimulatingPothole(false);
     }
   };
 
@@ -172,7 +181,7 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
         co2_surge_kg: Math.round(((850 * delayInc) / 3600) * 1.85)
       },
       recommended_reroute: {
-        route_name: `${pothole.Landmark || 'Corridor'} — Parallel Bypass Link (Route B)`,
+        route_name: `${pothole.Landmark ? pothole.Landmark.split(',')[0] : 'Corridor'} — Parallel Bypass Link (Route B)`,
         est_additional_travel_time_min: 1.8,
         capacity_status: 'Optimal (72% load)',
         nav_guidance: 'Divert heavy commuter traffic to parallel link to recover normal corridor throughput.'
@@ -180,13 +189,66 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
     };
   };
 
-  const handleSelectRoad = (road) => {
-    setSelectedRoad(road);
-    setActivePothole(null);
-    setActiveTab('telemetry');
+  // 3. Run Network Rerouting Simulation (Merged from TrafficRerouteView)
+  const runNetworkSimulation = (roadId, cType = closureType, tWin = trafficWindow, dHours = durationHours) => {
+    setIsSimulatingNetwork(true);
+    const token = localStorage.getItem('road_guardian_token');
+    fetch('/api/traffic/reroute', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ 
+        closed_road_id: roadId, 
+        closure_type: cType,
+        traffic_window: tWin,
+        duration_hours: Number(dHours),
+        center_lat: 28.6139, 
+        center_lon: 77.2090 
+      })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setNetworkSimResult(data);
+        setIsSimulatingNetwork(false);
+      })
+      .catch((err) => {
+        console.error('Network reroute simulation failed:', err);
+        setIsSimulatingNetwork(false);
+      });
   };
 
-  // 3. Initialize MapTiler WebGL Map
+  const handleSelectRoad = (road) => {
+    setSelectedRoad(road);
+    setClosedRoadId(road.id);
+    setActiveTab('segment-info');
+    runNetworkSimulation(road.id, closureType, trafficWindow, durationHours);
+  };
+
+  const handleRoadChange = (newId) => {
+    setClosedRoadId(newId);
+    const matched = network.find(r => r.id === newId);
+    if (matched) setSelectedRoad(matched);
+    runNetworkSimulation(newId, closureType, trafficWindow, durationHours);
+  };
+
+  const handleClosureTypeChange = (type) => {
+    setClosureType(type);
+    runNetworkSimulation(closedRoadId, type, trafficWindow, durationHours);
+  };
+
+  const handleTrafficWindowChange = (win) => {
+    setTrafficWindow(win);
+    runNetworkSimulation(closedRoadId, closureType, win, durationHours);
+  };
+
+  const handleDurationChange = (hrs) => {
+    setDurationHours(hrs);
+    runNetworkSimulation(closedRoadId, closureType, trafficWindow, hrs);
+  };
+
+  // 4. Initialize MapTiler WebGL Map
   useEffect(() => {
     if (!mapContainerRef.current || useLeaflet) return;
     if (mapObj.current) return;
@@ -263,16 +325,7 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
     };
   }, [useLeaflet]);
 
-  // 4. Sync road visibility toggle in MapTiler
-  useEffect(() => {
-    const map = mapObj.current;
-    if (!map || useLeaflet) return;
-    if (map.getLayer('roads-line')) {
-      map.setLayoutProperty('roads-line', 'visibility', showRoadNetwork ? 'visible' : 'none');
-    }
-  }, [showRoadNetwork, useLeaflet]);
-
-  // 5. Sync MapTiler Source & Markers
+  // 5. Sync MapTiler Source & Interactive Markers
   useEffect(() => {
     const map = mapObj.current;
     if (!map || useLeaflet || network.length === 0) return;
@@ -290,7 +343,7 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
           severity: road.severity,
           potholes: road.potholes,
           color: getRiskColor(road.severity),
-          width: selectedRoad?.id === road.id ? 10 : 7
+          width: (selectedRoad?.id === road.id || closedRoadId === road.id) ? 10 : 7
         },
         geometry: {
           type: 'LineString',
@@ -306,11 +359,9 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
         features: features
       });
 
-      // Clear existing markers
       const existingMarkers = document.querySelectorAll('.mapboxgl-marker, .maplibregl-marker');
       existingMarkers.forEach(el => el.remove());
 
-      // Render Pothole Markers with direct Click -> SUMO Simulation trigger
       const listToRender = potholesList.length > 0 ? potholesList : sampleFallback;
       listToRender.forEach(p => {
         const lat = parseFloat(p.Latitude);
@@ -320,7 +371,6 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
         const isCurrent = activePothole && (activePothole.id === p.id || (activePothole.Latitude === p.Latitude && activePothole.Longitude === p.Longitude));
         let markerColor = getRiskColor(p.Severity);
 
-        // Custom DOM element for high-tech pulsing marker
         const el = document.createElement('div');
         el.className = 'sumo-pothole-marker';
         el.style.width = isCurrent ? '26px' : '20px';
@@ -328,9 +378,9 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
         el.style.borderRadius = '50%';
         el.style.background = markerColor;
         el.style.border = isCurrent ? '3px solid #ffffff' : '2px solid #000000';
-        el.style.boxShadow = isCurrent ? `0 0 16px ${markerColor}, 0 0 30px ${markerColor}` : `0 0 8px ${markerColor}`;
+        el.style.boxShadow = isCurrent ? `0 0 18px ${markerColor}, 0 0 32px ${markerColor}` : `0 0 8px ${markerColor}`;
         el.style.cursor = 'pointer';
-        el.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+        el.style.transition = 'all 0.2s ease';
         el.style.display = 'flex';
         el.style.alignItems = 'center';
         el.style.justifyContent = 'center';
@@ -346,8 +396,8 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
             <div style="color: #0f172a; font-family: sans-serif; font-size: 11px; padding: 4px;">
               <span style="color: ${markerColor}; font-weight: bold;">⚠️ ${p.Severity} Pothole Hazard</span><br/>
               <b>${p.Landmark || p.Image || 'Reported Hazard'}</b><br/>
-              Risk: <b>${p.Risk_Score || 75}/100</b><br/>
-              <span style="color: #0284c7; font-size: 10px; font-weight: 600;">👉 Click to start SUMO Simulation</span>
+              Risk Score: <b>${p.Risk_Score || 75}/100</b><br/>
+              <span style="color: #0284c7; font-size: 10px; font-weight: 700;">👉 Click to run SUMO Simulation</span>
             </div>
           `);
 
@@ -368,20 +418,16 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
       if (e.features && e.features.length > 0) {
         const clickedId = e.features[0].properties.id;
         const road = network.find(r => r.id === clickedId);
-        if (road) {
-          handleSelectRoad(road);
-        }
+        if (road) handleSelectRoad(road);
       }
     };
 
     map.off('click', 'roads-line', handleClick);
     map.on('click', 'roads-line', handleClick);
 
-  }, [network, selectedRoad, activePothole, potholesList, useLeaflet]);
+  }, [network, selectedRoad, closedRoadId, activePothole, potholesList, useLeaflet]);
 
-  // ==========================================
-  // DYNAMIC LEAFLET FALLBACK ENGINE
-  // ==========================================
+  // 6. Dynamic Leaflet Fallback
   useEffect(() => {
     if (!useLeaflet || leafletLoaded) return;
     
@@ -433,8 +479,8 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
         [road.end[1], road.end[0]]
       ], {
         color: color,
-        weight: 6,
-        opacity: 0.8,
+        weight: (selectedRoad?.id === road.id || closedRoadId === road.id) ? 8 : 4,
+        opacity: 0.85,
         lineJoin: 'round'
       }).addTo(map);
 
@@ -443,7 +489,6 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
     });
     leafletPolylinesRef.current = polylines;
 
-    // Render Pothole Markers on Leaflet
     const listToRender = potholesList.length > 0 ? potholesList : sampleFallback;
     listToRender.forEach(p => {
       const lat = parseFloat(p.Latitude);
@@ -462,10 +507,9 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
 
       circleMarker.bindPopup(`
         <div style="color: #0f172a; font-family: sans-serif; font-size: 11px; padding: 2px;">
-          <span style="color: ${markerColor}; font-weight: bold;">⚠️ Reported Pothole (${p.Severity})</span><br/>
+          <span style="color: ${markerColor}; font-weight: bold;">⚠️ ${p.Severity} Pothole</span><br/>
           <b>${p.Landmark || p.Image}</b><br/>
-          Risk: <b>${p.Risk_Score}/100</b><br/>
-          <span style="color: #0284c7; font-weight: bold;">👉 Click to start SUMO Simulation</span>
+          <span style="color: #0284c7; font-weight: bold;">👉 Click to run SUMO Simulation</span>
         </div>
       `);
 
@@ -481,6 +525,18 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
       }
     };
   }, [leafletLoaded, network, potholesList, useLeaflet]);
+
+  // 7. Charts Data Preparation
+  const rerouteChartData = networkSimResult?.updated_network?.slice(0, 8).map(seg => {
+    const isClosed = seg.id === closedRoadId;
+    return {
+      name: seg.name.length > 16 ? seg.name.slice(0, 14) + '…' : seg.name,
+      fullName: seg.name,
+      original: seg.base_traffic,
+      rerouted: isClosed ? (closureType === 'full' ? 0 : Math.round(seg.base_traffic * 0.5)) : (seg.simulated_traffic || seg.base_traffic),
+      capacity: seg.base_capacity
+    };
+  }) || [];
 
   const capacityVsTrafficData = network.map(seg => ({
     name: seg.name.replace('Northern Arterial Highway', 'Road A')
@@ -498,7 +554,7 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
   }));
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       <style>{`
         .maplibregl-canvas, .mapboxgl-canvas {
           width: 100% !important;
@@ -506,9 +562,6 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
           position: absolute !important;
           top: 0;
           left: 0;
-        }
-        .maplibregl-map, .mapboxgl-map {
-          overflow: visible !important;
         }
         .sumo-pothole-marker:hover {
           transform: scale(1.3);
@@ -523,21 +576,20 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
         }
       `}</style>
 
-      {/* TOP BANNER: DIGITAL TWIN + SUMO SIMULATOR INTEGRATION */}
+      {/* TOP UNIFIED HEADER: DIGITAL TWIN & SUMO SIMULATOR */}
       <div className="glass-card" style={{ 
-        marginBottom: '16px', 
-        padding: '16px 20px', 
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(24, 24, 27, 0.9) 100%)',
-        border: '1px solid rgba(56, 189, 248, 0.3)'
+        padding: '18px 22px', 
+        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(24, 24, 27, 0.92) 100%)',
+        border: '1px solid rgba(56, 189, 248, 0.35)'
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           <div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Navigation size={22} color="#00E6B4" /> 
-              Digital Twin Map & SUMO Microscopic Traffic Simulator
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Compass size={22} color="#00E6B4" /> 
+              Digital Twin & SUMO Traffic Simulator
             </h2>
-            <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '3px' }}>
-              Click on any reported pothole marker or corridor line on the map below to run live <strong>SUMO car-following physics</strong>, speed constriction, delay ripple, and bypass rerouting.
+            <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '3px' }}>
+              Integrated Spatial GIS Map, Microscopic Pothole Bottleneck Physics, and City-Scale Dynamic Rerouting Engine.
             </p>
           </div>
 
@@ -554,7 +606,7 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
               alignItems: 'center',
               gap: '6px'
             }}>
-              <Activity size={13} className="spin-slow" /> SUMO Engine Ready
+              <Activity size={13} className="spin-slow" /> Layer 4 SUMO Connected
             </span>
             <span style={{
               fontSize: '0.74rem',
@@ -572,8 +624,8 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
 
         {/* QUICK HAZARD SELECTOR CAROUSEL */}
         <div style={{ marginTop: '14px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
-          <div style={{ fontSize: '0.72rem', color: '#71717a', textTransform: 'uppercase', fontWeight: 600, marginBottom: '6px' }}>
-            SELECT HAZARD TO SIMULATE BOTTLENECK:
+          <div style={{ fontSize: '0.7rem', color: '#71717a', textTransform: 'uppercase', fontWeight: 600, marginBottom: '6px' }}>
+            CLICK HAZARD TO START SIMULATION ON MAP:
           </div>
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
             {potholesList.map((p, idx) => {
@@ -611,15 +663,15 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
         </div>
       </div>
 
-      {/* MAIN 2-COLUMN GRID: MAP (LEFT) + SUMO SIMULATION PANEL (RIGHT) */}
-      <div className="grid-3" style={{ gridTemplateColumns: '1.7fr 1.3fr', gap: '20px', marginBottom: '20px' }}>
+      {/* MAIN 2-COLUMN VIEW: MAP (LEFT) + SIMULATOR/TELEMETRY PANEL (RIGHT) */}
+      <div className="grid-3" style={{ gridTemplateColumns: '1.6fr 1.4fr', gap: '20px' }}>
         
-        {/* Left Column: Interactive Map Canvas */}
+        {/* Left Column: Interactive GIS Digital Twin Map */}
         <div className="glass-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h3 style={{ fontSize: '1rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '0.98rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Navigation size={17} color="#00E6B4" /> 
-              {useLeaflet ? 'Spatial GIS Map (Leaflet 2D)' : 'Hardware Accelerated Digital Twin Map'}
+              {useLeaflet ? 'Spatial GIS Map (Leaflet 2D)' : 'Hardware-Accelerated Digital Twin Canvas'}
             </h3>
             
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -661,7 +713,7 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
             </div>
           </div>
 
-          <div style={{ height: '480px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-muted)', position: 'relative' }}>
+          <div style={{ height: '520px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-muted)', position: 'relative' }}>
             <div ref={mapContainerRef} style={{ height: '100%', width: '100%', background: '#09090b', position: 'relative', zIndex: 1 }} />
             
             {useLeaflet && !leafletLoaded && (
@@ -671,12 +723,11 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
               </div>
             )}
 
-            {/* In-Map Guide Tip */}
             <div style={{
               position: 'absolute',
               bottom: '12px',
               left: '12px',
-              background: 'rgba(9, 9, 11, 0.88)',
+              background: 'rgba(9, 9, 11, 0.9)',
               backdropFilter: 'blur(8px)',
               padding: '6px 12px',
               borderRadius: '8px',
@@ -688,24 +739,24 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
               alignItems: 'center',
               gap: '6px'
             }}>
-              <span>💡</span> Click any <strong>pothole marker (⚠️)</strong> to simulate its traffic shockwave.
+              <span>💡</span> Click any <strong>pothole marker (⚠️)</strong> or <strong>road line</strong> to start real-time SUMO simulation.
             </div>
           </div>
         </div>
 
-        {/* Right Column: Dynamic SUMO Traffic Simulator & Bottleneck Telemetry Panel */}
+        {/* Right Column: Unified SUMO Bottleneck & Network Rerouting Engine */}
         <div className="glass-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column' }}>
           
-          {/* Header Switcher Tabs */}
+          {/* Main 3-Tab Selector */}
           <div style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
             <button
               onClick={() => setActiveTab('sumo')}
               style={{
                 flex: 1,
-                padding: '8px',
+                padding: '9px 6px',
                 borderRadius: '8px',
                 border: activeTab === 'sumo' ? '1px solid #38BDF8' : '1px solid #27272a',
-                background: activeTab === 'sumo' ? 'rgba(56, 189, 248, 0.18)' : '#18181b',
+                background: activeTab === 'sumo' ? 'rgba(56, 189, 248, 0.2)' : '#18181b',
                 color: activeTab === 'sumo' ? '#38BDF8' : '#a1a1aa',
                 fontSize: '0.76rem',
                 fontWeight: 700,
@@ -713,57 +764,77 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '6px'
+                gap: '5px'
               }}
             >
               <span>🚦</span> SUMO Bottleneck Model
             </button>
 
             <button
-              onClick={() => setActiveTab('repair')}
+              onClick={() => setActiveTab('network-reroute')}
               style={{
                 flex: 1,
-                padding: '8px',
+                padding: '9px 6px',
                 borderRadius: '8px',
-                border: activeTab === 'repair' ? '1px solid #00E6B4' : '1px solid #27272a',
-                background: activeTab === 'repair' ? 'rgba(0, 230, 180, 0.18)' : '#18181b',
-                color: activeTab === 'repair' ? '#00E6B4' : '#a1a1aa',
+                border: activeTab === 'network-reroute' ? '1px solid #00E6B4' : '1px solid #27272a',
+                background: activeTab === 'network-reroute' ? 'rgba(0, 230, 180, 0.2)' : '#18181b',
+                color: activeTab === 'network-reroute' ? '#00E6B4' : '#a1a1aa',
                 fontSize: '0.76rem',
                 fontWeight: 700,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '6px'
+                gap: '5px'
               }}
             >
-              <span>🚧</span> Repair Closure Simulation
+              <span>🧭</span> Network Rerouting Engine
+            </button>
+
+            <button
+              onClick={() => setActiveTab('segment-info')}
+              style={{
+                flex: 0.8,
+                padding: '9px 6px',
+                borderRadius: '8px',
+                border: activeTab === 'segment-info' ? '1px solid #F59E0B' : '1px solid #27272a',
+                background: activeTab === 'segment-info' ? 'rgba(245, 158, 11, 0.2)' : '#18181b',
+                color: activeTab === 'segment-info' ? '#F59E0B' : '#a1a1aa',
+                fontSize: '0.76rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '5px'
+              }}
+            >
+              <span>📊</span> Segment Node
             </button>
           </div>
 
-          {/* TAB 1: LIVE SUMO POTHOLE BOTTLENECK MODEL */}
+          {/* TAB 1: SUMO MICROSCOPIC POTHOLE BOTTLENECK MODEL */}
           {activeTab === 'sumo' && (
             <div>
               {activePothole ? (
                 <div>
-                  {/* Selected Pothole Info Banner */}
                   <div style={{
                     padding: '12px 14px',
                     borderRadius: '10px',
                     background: '#18181b',
                     border: '1px solid var(--border-muted)',
-                    marginBottom: '14px'
+                    marginBottom: '12px'
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: '0.68rem', color: '#71717a', textTransform: 'uppercase', fontWeight: 700 }}>
-                        TARGET HAZARD SIMULATION
+                        ACTIVE POTHOLE HAZARD
                       </span>
                       <span className={`badge badge-${activePothole.Severity?.toLowerCase() || 'high'}`} style={{ fontSize: '0.72rem' }}>
                         {activePothole.Severity} Severity
                       </span>
                     </div>
 
-                    <div style={{ fontSize: '0.98rem', fontWeight: 700, color: '#fff', marginTop: '4px' }}>
+                    <div style={{ fontSize: '0.96rem', fontWeight: 700, color: '#fff', marginTop: '4px' }}>
                       📍 {activePothole.Landmark || activePothole.Image || 'City Road Segment'}
                     </div>
 
@@ -773,11 +844,11 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
                     </div>
                   </div>
 
-                  {isSimulating ? (
-                    <div style={{ height: '240px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#38BDF8' }}>
-                      <RefreshCw size={28} className="spin" style={{ marginBottom: '10px' }} />
-                      <div style={{ fontWeight: 600, fontSize: '0.86rem' }}>Running TraCI & SUMO Physics Engine...</div>
-                      <div style={{ fontSize: '0.74rem', color: '#71717a', marginTop: '4px' }}>Computing Krauss deceleration waves & detour links</div>
+                  {isSimulatingPothole ? (
+                    <div style={{ height: '260px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#38BDF8' }}>
+                      <RefreshCw size={30} className="spin" style={{ marginBottom: '10px' }} />
+                      <div style={{ fontWeight: 600, fontSize: '0.86rem' }}>Running TraCI & SUMO Car-Following Physics...</div>
+                      <div style={{ fontSize: '0.74rem', color: '#71717a', marginTop: '4px' }}>Simulating Krauss braking ripple & bypass detours</div>
                     </div>
                   ) : potholeSimResult ? (
                     <div>
@@ -796,10 +867,10 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
                           <span style={{ fontSize: '1.2rem' }}>⚠️</span>
                           <div>
                             <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#EF4444' }}>
-                              {potholeSimResult.traffic_impact_level || 'HIGH TRAFFIC IMPACT'}
+                              {potholeSimResult.traffic_impact_level || 'CRITICAL BOTTLENECK'}
                             </div>
                             <div style={{ fontSize: '0.68rem', color: '#fca5a5' }}>
-                              Krauss Deceleration Shockwave Active
+                              Krauss Deceleration Ripple Active
                             </div>
                           </div>
                         </div>
@@ -808,7 +879,7 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
                         </span>
                       </div>
 
-                      {/* Speed Drop & Delay Surge Comparison Grid */}
+                      {/* Speed Drop & Delay Grid */}
                       <div className="grid-2" style={{ gap: '10px', marginBottom: '12px' }}>
                         <div style={{ background: '#18181b', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-muted)' }}>
                           <div style={{ fontSize: '0.68rem', color: '#71717a', textTransform: 'uppercase' }}>Corridor Speed Drop</div>
@@ -816,7 +887,7 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
                             <span style={{ fontSize: '0.8rem', color: '#71717a', textDecoration: 'line-through' }}>
                               {potholeSimResult.scenario_normal?.speed_kmh || 50} km/h
                             </span>
-                            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#EF4444' }}>
+                            <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#EF4444' }}>
                               {potholeSimResult.scenario_damaged?.speed_kmh || 22} km/h
                             </span>
                             <span style={{ fontSize: '0.72rem', color: '#F87171', fontWeight: 700 }}>
@@ -826,9 +897,9 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
                         </div>
 
                         <div style={{ background: '#18181b', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-muted)' }}>
-                          <div style={{ fontSize: '0.68rem', color: '#71717a', textTransform: 'uppercase' }}>Per-Vehicle Delay</div>
+                          <div style={{ fontSize: '0.68rem', color: '#71717a', textTransform: 'uppercase' }}>Vehicle Delay Surge</div>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
-                            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#F59E0B' }}>
+                            <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#F59E0B' }}>
                               +{potholeSimResult.scenario_damaged?.delay_increase_sec || 36}s
                             </span>
                             <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
@@ -841,7 +912,7 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
                       {/* Cumulative Delay & Emissions */}
                       <div className="grid-2" style={{ gap: '10px', marginBottom: '12px' }}>
                         <div style={{ background: 'rgba(245, 158, 11, 0.08)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.25)' }}>
-                          <div style={{ fontSize: '0.68rem', color: '#F59E0B', fontWeight: 600 }}>3-Hour Commuter Toll:</div>
+                          <div style={{ fontSize: '0.68rem', color: '#F59E0B', fontWeight: 600 }}>3-Hour Commuter Delay:</div>
                           <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff', marginTop: '2px' }}>
                             {potholeSimResult.cumulative_impact?.vehicle_delay_hours || 142} vehicle-hours
                           </div>
@@ -855,18 +926,18 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
                         </div>
                       </div>
 
-                      {/* Recommended Detour Bypass Box */}
+                      {/* Recommended Detour Box */}
                       {potholeSimResult.recommended_reroute && (
                         <div style={{
                           background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.12), rgba(15, 23, 42, 0.8))',
                           border: '1px solid rgba(56, 189, 248, 0.4)',
                           borderRadius: '10px',
                           padding: '12px 14px',
-                          marginBottom: '12px'
+                          marginBottom: '10px'
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                             <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#38BDF8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span>🧭</span> Recommended SUMO Detour
+                              <span>🧭</span> SUMO Recommended Detour
                             </span>
                             <span style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: 700, background: 'rgba(16, 185, 129, 0.2)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.4)' }}>
                               +{potholeSimResult.recommended_reroute.est_additional_travel_time_min || 1.8}m delta
@@ -880,6 +951,17 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
                           </div>
                         </div>
                       )}
+
+                      <button
+                        className="btn-secondary"
+                        onClick={() => {
+                          setActiveTab('network-reroute');
+                          if (selectedRoad) handleRoadChange(selectedRoad.id);
+                        }}
+                        style={{ width: '100%', fontSize: '0.78rem', padding: '8px', justifyContent: 'center', gap: '6px' }}
+                      >
+                        <Compass size={14} color="#00E6B4" /> Simulate Full Network Repair Closure on this Segment
+                      </button>
                     </div>
                   ) : null}
                 </div>
@@ -887,121 +969,170 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
                 <div style={{ height: '260px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#71717a', textAlign: 'center' }}>
                   <AlertCircle size={36} style={{ marginBottom: '10px', opacity: 0.5 }} />
                   <p style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem' }}>No Pothole Selected</p>
-                  <p style={{ fontSize: '0.76rem', marginTop: '3px' }}>Click any <strong>pothole marker (⚠️)</strong> on the map or select from the top list.</p>
+                  <p style={{ fontSize: '0.76rem', marginTop: '3px' }}>Click any <strong>pothole marker (⚠️)</strong> on the map to start live SUMO simulation.</p>
                 </div>
               )}
             </div>
           )}
 
-          {/* TAB 2: SCHEDULED REPAIR CLOSURE SIMULATION SANDBOX */}
-          {activeTab === 'repair' && (
+          {/* TAB 2: NETWORK REPAIR REROUTING SIMULATION (Full Merged Reroute Simulator) */}
+          {activeTab === 'network-reroute' && (
             <div>
-              <div style={{ padding: '12px 14px', borderRadius: '10px', background: '#18181b', border: '1px solid var(--border-muted)', marginBottom: '14px' }}>
-                <div style={{ fontSize: '0.68rem', color: '#71717a', textTransform: 'uppercase', fontWeight: 700 }}>REPAIR CORRIDOR</div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff', marginTop: '2px' }}>
-                  {activePothole?.Landmark || selectedRoad?.name || 'Selected Corridor'}
+              {/* Corridor Selection */}
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem' }}>
+                  <span>Corridor Scheduled for Repair:</span>
+                  <span style={{ color: '#00E6B4' }}>{network.length} Arteries Connected</span>
+                </label>
+                <select 
+                  className="form-select"
+                  value={closedRoadId}
+                  onChange={(e) => handleRoadChange(e.target.value)}
+                  style={{ background: '#121214', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: '0.8rem', padding: '8px 10px' }}
+                >
+                  {network.map(r => (
+                    <option key={r.id} value={r.id}>
+                      {r.name} — {r.severity || 'Normal'} ({r.potholes || 0} Potholes, {r.base_traffic} veh/hr)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Closure Scope Toggle */}
+              <div style={{ marginBottom: '12px' }}>
+                <label className="form-label" style={{ marginBottom: '6px', display: 'block', fontSize: '0.76rem' }}>Closure Scope:</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleClosureTypeChange('full')}
+                    style={{
+                      padding: '8px',
+                      borderRadius: '8px',
+                      border: closureType === 'full' ? '1px solid #EF4444' : '1px solid #27272a',
+                      background: closureType === 'full' ? 'rgba(239, 68, 68, 0.15)' : '#18181b',
+                      color: closureType === 'full' ? '#FCA5A5' : '#a1a1aa',
+                      fontWeight: 600,
+                      fontSize: '0.76rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '5px'
+                    }}
+                  >
+                    <AlertOctagon size={13} color={closureType === 'full' ? '#EF4444' : '#71717a'} />
+                    Full Corridor (100% Divert)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleClosureTypeChange('single_lane')}
+                    style={{
+                      padding: '8px',
+                      borderRadius: '8px',
+                      border: closureType === 'single_lane' ? '1px solid #F59E0B' : '1px solid #27272a',
+                      background: closureType === 'single_lane' ? 'rgba(245, 158, 11, 0.15)' : '#18181b',
+                      color: closureType === 'single_lane' ? '#FCD34D' : '#a1a1aa',
+                      fontWeight: 600,
+                      fontSize: '0.76rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '5px'
+                    }}
+                  >
+                    <AlertTriangle size={13} color={closureType === 'single_lane' ? '#F59E0B' : '#71717a'} />
+                    Single Lane (50% Divert)
+                  </button>
                 </div>
               </div>
 
-              {/* Closure Controls */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px' }}>
+              {/* Traffic Window & Duration */}
+              <div className="grid-2" style={{ gap: '10px', marginBottom: '12px' }}>
                 <div>
-                  <label className="form-label" style={{ fontSize: '0.74rem' }}>Closure Mode:</label>
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                    <button
-                      type="button"
-                      onClick={() => setSimClosureType('single_lane')}
-                      style={{
-                        flex: 1,
-                        padding: '8px',
-                        borderRadius: '6px',
-                        border: simClosureType === 'single_lane' ? '1px solid #00E6B4' : '1px solid #27272a',
-                        background: simClosureType === 'single_lane' ? 'rgba(0, 230, 180, 0.15)' : '#18181b',
-                        color: simClosureType === 'single_lane' ? '#00E6B4' : '#a1a1aa',
-                        fontSize: '0.76rem',
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Single Lane Repair (50% Flow)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSimClosureType('full')}
-                      style={{
-                        flex: 1,
-                        padding: '8px',
-                        borderRadius: '6px',
-                        border: simClosureType === 'full' ? '1px solid #EF4444' : '1px solid #27272a',
-                        background: simClosureType === 'full' ? 'rgba(239, 68, 68, 0.15)' : '#18181b',
-                        color: simClosureType === 'full' ? '#EF4444' : '#a1a1aa',
-                        fontSize: '0.76rem',
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Full Corridor Closure
-                    </button>
-                  </div>
+                  <label className="form-label" style={{ fontSize: '0.74rem', marginBottom: '4px' }}>Traffic Window:</label>
+                  <select
+                    className="form-select"
+                    value={trafficWindow}
+                    onChange={(e) => handleTrafficWindowChange(e.target.value)}
+                    style={{ background: '#121214', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: '0.76rem', padding: '6px 8px' }}
+                  >
+                    <option value="peak">Rush Peak (1.35x)</option>
+                    <option value="normal">Normal Flow (1.0x)</option>
+                    <option value="off_peak">Night Off-Peak (0.6x)</option>
+                  </select>
                 </div>
 
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem', color: '#a1a1aa' }}>
-                    <span>Estimated Repair Duration:</span>
-                    <strong style={{ color: '#fff' }}>{simDurationHours} Hours</strong>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem', color: '#a1a1aa', marginBottom: '4px' }}>
+                    <span>Duration:</span>
+                    <strong style={{ color: '#00E6B4' }}>{durationHours}h</strong>
                   </div>
-                  <input
-                    type="range"
-                    min="1"
-                    max="12"
-                    value={simDurationHours}
-                    onChange={(e) => setSimDurationHours(Number(e.target.value))}
-                    style={{ width: '100%', marginTop: '4px', accentColor: '#00E6B4' }}
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="24" 
+                    step="1"
+                    value={durationHours}
+                    onChange={(e) => handleDurationChange(e.target.value)}
+                    style={{ width: '100%', accentColor: '#00E6B4', cursor: 'pointer' }}
                   />
                 </div>
               </div>
 
-              {/* Repair Impact Summary */}
-              <div style={{ background: '#18181b', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-muted)', marginBottom: '14px' }}>
-                <div style={{ fontSize: '0.74rem', color: '#71717a', textTransform: 'uppercase', fontWeight: 600 }}>PREDICTIVE REPAIR TOLL</div>
-                <div className="grid-2" style={{ gap: '8px', marginTop: '8px' }}>
-                  <div>
-                    <span style={{ fontSize: '0.7rem', color: '#a1a1aa' }}>Displaced Traffic:</span>
-                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#38BDF8' }}>
-                      {simClosureType === 'full' ? '850' : '425'} veh/hr
+              {/* Simulation Result 4-KPIs */}
+              {networkSimResult && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div className="grid-2" style={{ gap: '8px' }}>
+                    <div style={{ background: '#18181b', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border-muted)' }}>
+                      <span style={{ fontSize: '0.68rem', color: '#71717a' }}>Displaced Flow</span>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#38BDF8', marginTop: '2px' }}>
+                        {networkSimResult.displaced_traffic} <span style={{ fontSize: '0.7rem', fontWeight: 500 }}>veh/hr</span>
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '0.7rem', color: '#a1a1aa' }}>Detour Window:</span>
-                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#F59E0B' }}>
-                      {simDurationHours}h Peak Stress
-                    </div>
-                  </div>
-                </div>
-              </div>
 
-              {onNavigateToReroute && (
-                <button
-                  className="btn-primary"
-                  onClick={onNavigateToReroute}
-                  style={{ width: '100%', fontSize: '0.8rem', padding: '10px', justifyContent: 'center', gap: '6px' }}
-                >
-                  <Compass size={15} /> Open Advanced Network Reroute Simulator
-                </button>
+                    <div style={{ background: '#18181b', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border-muted)' }}>
+                      <span style={{ fontSize: '0.68rem', color: '#71717a' }}>Passenger Delay</span>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#F59E0B', marginTop: '2px' }}>
+                        {networkSimResult.delay_hours} <span style={{ fontSize: '0.7rem', fontWeight: 500 }}>hrs</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Top Detours List */}
+                  {networkSimResult.top_detours?.length > 0 && (
+                    <div style={{ background: '#18181b', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-muted)' }}>
+                      <div style={{ fontSize: '0.72rem', color: '#00E6B4', fontWeight: 700, marginBottom: '6px' }}>
+                        TOP DETOUR RECEIVERS & LOAD %:
+                      </div>
+                      {networkSimResult.top_detours.slice(0, 3).map((d, idx) => (
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.74rem', marginBottom: '4px', color: '#e4e4e7' }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '170px' }}>
+                            {idx+1}. {d.name}
+                          </span>
+                          <span style={{ fontWeight: 700, color: d.new_vc_ratio > 0.85 ? '#EF4444' : '#10B981' }}>
+                            {Math.round(d.new_vc_ratio * 100)}% V/C (+{d.pct_increase}%)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
 
           {/* TAB 3: ROAD SEGMENT TELEMETRY */}
-          {activeTab === 'telemetry' && (
+          {activeTab === 'segment-info' && (
             <div>
               {selectedRoad ? (
                 <div>
-                  <div style={{ padding: '14px', background: '#18181b', borderRadius: '10px', marginBottom: '14px', border: '1px solid var(--border-muted)' }}>
-                    <div style={{ fontSize: '0.7rem', color: '#71717a', textTransform: 'uppercase', fontWeight: 600 }}>SELECTED ROAD SEGMENT</div>
-                    <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fff', marginTop: '3px' }}>{selectedRoad.name}</div>
+                  <div style={{ padding: '12px 14px', background: '#18181b', borderRadius: '10px', marginBottom: '12px', border: '1px solid var(--border-muted)' }}>
+                    <div style={{ fontSize: '0.68rem', color: '#71717a', textTransform: 'uppercase', fontWeight: 600 }}>SELECTED ROAD SEGMENT</div>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fff', marginTop: '2px' }}>{selectedRoad.name}</div>
                     <div style={{ marginTop: '6px' }}>
-                      <span className={`badge badge-${selectedRoad.severity.toLowerCase()}`}>
+                      <span className={`badge badge-${selectedRoad.severity?.toLowerCase() || 'medium'}`}>
                         {selectedRoad.severity} Severity
                       </span>
                     </div>
@@ -1009,7 +1140,7 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
-                      <span style={{ fontSize: '0.8rem', color: '#a1a1aa' }}>Potholes Detected</span>
+                      <span style={{ fontSize: '0.8rem', color: '#a1a1aa' }}>Detected Potholes</span>
                       <span style={{ fontWeight: 700, color: '#F59E0B' }}>{selectedRoad.potholes} Hazards</span>
                     </div>
 
@@ -1031,7 +1162,7 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
                 </div>
               ) : (
                 <p style={{ color: '#71717a', fontSize: '0.85rem', textAlign: 'center', marginTop: '40px' }}>
-                  Click any road line on the map to view segment telemetry.
+                  Click any road line on the map to inspect segment telemetry.
                 </p>
               )}
             </div>
@@ -1039,81 +1170,112 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
         </div>
       </div>
 
-      {/* VISUAL ANALYTICS CHARTS GRID */}
-      <div className="grid-2">
+      {/* BOTTOM COMBINED ANALYTICS: 3 RICH CHARTS */}
+      <div className="grid-3" style={{ gridTemplateColumns: '1.2fr 1fr 0.8fr', gap: '16px' }}>
+        
+        {/* Chart 1: Before vs After Rerouted Traffic Load */}
         <div className="glass-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <h3 style={{ fontSize: '1rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <BarChart2 size={16} color="#00E6B4" /> Road Segment Traffic vs Capacity
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ fontSize: '0.92rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <BarChart2 size={15} color="#00E6B4" /> Before vs After Traffic Reroute
             </h3>
-            <span style={{ fontSize: '0.72rem', color: '#71717a' }}>veh / hr</span>
+            <span style={{ fontSize: '0.68rem', color: '#71717a' }}>veh / hr</span>
           </div>
 
-          <div style={{ height: '210px', width: '100%' }}>
+          <div style={{ height: '190px', width: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={capacityVsTrafficData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+              <BarChart data={rerouteChartData} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#18181b" vertical={false} />
-                <XAxis dataKey="name" stroke="#71717a" fontSize={11} tickLine={false} />
-                <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
+                <XAxis dataKey="name" stroke="#71717a" fontSize={10} tickLine={false} />
+                <YAxis stroke="#71717a" fontSize={10} tickLine={false} />
                 <Tooltip 
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       return (
-                        <div style={{ background: '#09090b', border: '1px solid #27272a', borderRadius: '8px', padding: '8px 12px', fontSize: '0.78rem' }}>
-                          <div style={{ color: '#fff', fontWeight: 600, marginBottom: '4px' }}>{payload[0].payload.fullName}</div>
-                          {payload.map((p, idx) => (
-                            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
-                              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: p.color || p.fill }} />
-                              <span style={{ color: '#a1a1aa' }}>{p.name}:</span>
-                              <span style={{ color: '#fff', fontWeight: 600 }}>{p.value} veh/hr</span>
-                            </div>
-                          ))}
+                        <div style={{ background: '#09090b', border: '1px solid #27272a', borderRadius: '8px', padding: '6px 10px', fontSize: '0.74rem' }}>
+                          <div style={{ color: '#fff', fontWeight: 600 }}>{payload[0].payload.fullName}</div>
+                          <div style={{ color: '#38BDF8', marginTop: '2px' }}>Original: {payload[0].payload.original} veh/hr</div>
+                          <div style={{ color: '#00E6B4', marginTop: '1px' }}>Rerouted: {payload[0].payload.rerouted} veh/hr</div>
                         </div>
                       );
                     }
                     return null;
                   }}
                 />
-                <Legend wrapperStyle={{ fontSize: '0.75rem', color: '#a1a1aa' }} />
-                <Bar dataKey="traffic" name="Traffic Volume" fill="#00E6B4" radius={[4, 4, 0, 0]} barSize={14} />
-                <Bar dataKey="capacity" name="Max Capacity" fill="#38BDF8" radius={[4, 4, 0, 0]} barSize={14} />
+                <Legend wrapperStyle={{ fontSize: '0.72rem', color: '#a1a1aa' }} />
+                <Bar dataKey="original" name="Baseline" fill="#38BDF8" radius={[3, 3, 0, 0]} barSize={10} />
+                <Bar dataKey="rerouted" name="Rerouted" fill="#00E6B4" radius={[3, 3, 0, 0]} barSize={10} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
+        {/* Chart 2: Road Capacity vs Traffic */}
         <div className="glass-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <h3 style={{ fontSize: '1rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <PieIcon size={16} color="#EF4444" /> Corridor Hazard Density & Severity
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ fontSize: '0.92rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Layers size={15} color="#38BDF8" /> Road Capacity vs Traffic
             </h3>
-            <span style={{ fontSize: '0.72rem', color: '#71717a' }}>Hazard Count</span>
+            <span style={{ fontSize: '0.68rem', color: '#71717a' }}>veh / hr</span>
           </div>
 
-          <div style={{ height: '210px', width: '100%' }}>
+          <div style={{ height: '190px', width: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={capacityVsTrafficData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={capacityVsTrafficData} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#18181b" vertical={false} />
-                <XAxis dataKey="name" stroke="#71717a" fontSize={11} tickLine={false} />
-                <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
+                <XAxis dataKey="name" stroke="#71717a" fontSize={10} tickLine={false} />
+                <YAxis stroke="#71717a" fontSize={10} tickLine={false} />
                 <Tooltip 
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       return (
-                        <div style={{ background: '#09090b', border: '1px solid #27272a', borderRadius: '8px', padding: '8px 12px', fontSize: '0.78rem' }}>
-                          <div style={{ color: '#fff', fontWeight: 600, marginBottom: '4px' }}>{payload[0].payload.fullName}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: payload[0].payload.color }} />
-                            <span style={{ color: '#a1a1aa' }}>Potholes:</span>
-                            <span style={{ color: '#fff', fontWeight: 600 }}>{payload[0].value} Hazards</span>
-                          </div>
+                        <div style={{ background: '#09090b', border: '1px solid #27272a', borderRadius: '8px', padding: '6px 10px', fontSize: '0.74rem' }}>
+                          <div style={{ color: '#fff', fontWeight: 600 }}>{payload[0].payload.fullName}</div>
+                          <div style={{ color: '#00E6B4' }}>Traffic: {payload[0].payload.traffic} veh/hr</div>
+                          <div style={{ color: '#38BDF8' }}>Capacity: {payload[0].payload.capacity} veh/hr</div>
                         </div>
                       );
                     }
                     return null;
                   }}
                 />
-                <Bar dataKey="potholes" name="Detected Potholes" radius={[4, 4, 0, 0]} barSize={18}>
+                <Legend wrapperStyle={{ fontSize: '0.72rem', color: '#a1a1aa' }} />
+                <Bar dataKey="traffic" name="Traffic" fill="#00E6B4" radius={[3, 3, 0, 0]} barSize={10} />
+                <Bar dataKey="capacity" name="Max Cap" fill="#38BDF8" radius={[3, 3, 0, 0]} barSize={10} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Chart 3: Pothole Hazard Density Breakdown */}
+        <div className="glass-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ fontSize: '0.92rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <PieIcon size={15} color="#EF4444" /> Hazard Density
+            </h3>
+            <span style={{ fontSize: '0.68rem', color: '#71717a' }}>Count</span>
+          </div>
+
+          <div style={{ height: '190px', width: '100%' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={capacityVsTrafficData} margin={{ top: 10, right: 5, left: -25, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#18181b" vertical={false} />
+                <XAxis dataKey="name" stroke="#71717a" fontSize={10} tickLine={false} />
+                <YAxis stroke="#71717a" fontSize={10} tickLine={false} />
+                <Tooltip 
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div style={{ background: '#09090b', border: '1px solid #27272a', borderRadius: '8px', padding: '6px 10px', fontSize: '0.74rem' }}>
+                          <div style={{ color: '#fff', fontWeight: 600 }}>{payload[0].payload.fullName}</div>
+                          <div style={{ color: payload[0].payload.color, marginTop: '2px' }}>Potholes: {payload[0].value}</div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Bar dataKey="potholes" name="Potholes" radius={[3, 3, 0, 0]} barSize={14}>
                   {capacityVsTrafficData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
@@ -1122,6 +1284,7 @@ export default function DigitalTwinMapView({ onNavigateToReroute }) {
             </ResponsiveContainer>
           </div>
         </div>
+
       </div>
     </div>
   );

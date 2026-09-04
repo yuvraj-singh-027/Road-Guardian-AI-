@@ -12,9 +12,8 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
     ];
   } else {
     navItems = [
-      { id: 'digital-twin', label: 'Digital Twin City Map', icon: Map, badge: 'Spatial' },
+      { id: 'digital-twin', label: 'Digital Twin & Traffic Simulator', icon: Map, badge: 'SUMO Sim' },
       { id: 'my-reports', label: 'Reports & Municipal Audit', icon: ClipboardList, badge: 'Unified' },
-      { id: 'traffic-reroute', label: 'Traffic Simulator', icon: Cpu, badge: 'Layer 4' },
       { id: 'risk-calculator', label: 'Risk Engine Evaluator', icon: ShieldAlert, badge: 'Layer 2' },
     ];
   }

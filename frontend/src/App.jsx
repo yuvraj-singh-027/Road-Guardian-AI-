@@ -141,13 +141,13 @@ export default function App() {
         };
       case 'digital-twin':
         return {
-          title: '3D Digital Twin Spatial Road Network',
-          subtitle: 'Interactive spatial map of city road segments with real-time risk classification and traffic telemetry'
+          title: 'Digital Twin & SUMO Traffic Simulator',
+          subtitle: 'Integrated Spatial GIS Map, Microscopic Pothole Bottleneck Physics, and Dynamic Rerouting Engine'
         };
       case 'traffic-reroute':
         return {
-          title: 'Predictive Traffic Intelligence & Rerouting',
-          subtitle: 'Simulate road segment maintenance closures and predict citywide capacity redistribution'
+          title: 'Digital Twin & SUMO Traffic Simulator',
+          subtitle: 'Integrated Spatial GIS Map, Microscopic Pothole Bottleneck Physics, and Dynamic Rerouting Engine'
         };
       case 'risk-calculator':
         return {
@@ -385,8 +385,8 @@ export default function App() {
             onNavigateToMap={() => setActiveTab('digital-twin')} 
           />
         )}
-        {activeTab === 'digital-twin' && <DigitalTwinMapView onNavigateToReroute={() => setActiveTab('traffic-reroute')} />}
-        {activeTab === 'traffic-reroute' && (userRole === 'admin' ? <TrafficRerouteView /> : renderRestrictedAccessNotice())}
+        {activeTab === 'digital-twin' && <DigitalTwinMapView />}
+        {activeTab === 'traffic-reroute' && <DigitalTwinMapView />}
         {activeTab === 'risk-calculator' && (userRole === 'admin' ? <RiskCalculatorView /> : renderRestrictedAccessNotice())}
       </div>
 
