@@ -189,7 +189,7 @@ export default function DigitalTwinMapView() {
     };
   };
 
-  // 3. Run Network Rerouting Simulation (Merged from TrafficRerouteView)
+  // 3. Run Network Rerouting Simulation
   const runNetworkSimulation = (roadId, cType = closureType, tWin = trafficWindow, dHours = durationHours) => {
     setIsSimulatingNetwork(true);
     const token = localStorage.getItem('road_guardian_token');
