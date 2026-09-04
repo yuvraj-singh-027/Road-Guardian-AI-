@@ -616,13 +616,15 @@ async def detect_image(
 ):
     contents = await file.read()
 
-    # Dynamic User Email: Prioritize form email, then session user, with graceful fallback
+    # Dynamic User Email: Prioritize form submitted email, then authenticated session user
     submitted_email = reporter_email or user_email or user_gmail or email
-    resolved_email: str = "yuvrajmksingh20@gmail.com"
+    resolved_email: str = ""
     if submitted_email and str(submitted_email).strip() and "@" in str(submitted_email):
         resolved_email = str(submitted_email).strip()
     elif current_user and isinstance(current_user, dict) and current_user.get("email"):
         resolved_email = str(current_user.get("email")).strip()
+    else:
+        resolved_email = "citizen@roadguardian.gov"
 
     # 1. BASIC IMAGE VALIDATION LAYER
     validate_uploaded_image(contents, file.filename or "uploaded_hazard.jpg", file.content_type or "")

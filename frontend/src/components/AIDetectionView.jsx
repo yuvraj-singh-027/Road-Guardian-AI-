@@ -35,13 +35,13 @@ export default function AIDetectionView({ userRole = 'public', user, onNavigateT
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchTimeoutRef = useRef(null);
 
-  // Reporter contact email (synced with logged-in user or stored email)
+  // Reporter contact email (synced directly with logged-in user or entered email)
   const [reporterEmail, setReporterEmail] = useState(() => {
     return user?.email || localStorage.getItem('road_guardian_reporter_email') || '';
   });
 
   useEffect(() => {
-    if (user?.email && !reporterEmail) {
+    if (user?.email) {
       setReporterEmail(user.email);
       localStorage.setItem('road_guardian_reporter_email', user.email);
     }

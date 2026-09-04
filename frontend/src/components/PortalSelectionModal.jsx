@@ -29,8 +29,8 @@ export default function PortalSelectionModal({ user, onSelectRole, onOpenAuth })
               <UserIcon size={16} color="#00E6B4" />
             </div>
             <div style={{ textAlign: 'left' }}>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>{user?.name || 'Active Operator'}</div>
-              <div style={{ fontSize: '0.72rem', color: '#a1a1aa' }}>{user?.email || 'yuvrajmksingh20@gmail.com'}</div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>{user?.name || 'Public Citizen (Guest)'}</div>
+              <div style={{ fontSize: '0.72rem', color: '#a1a1aa' }}>{user?.email || 'Not Logged In — Click Sign In'}</div>
             </div>
           </div>
 

@@ -44,13 +44,7 @@ if (typeof window !== 'undefined' && !window.__fetch_intercepted__) {
 }
 
 export default function App() {
-  const [user, setUser] = useState({
-    id: 1,
-    name: 'Yuvraj Singh',
-    email: 'yuvrajmksingh20@gmail.com',
-    role: 'admin',
-    department: 'Public Works & Road Safety Authority'
-  });
+  const [user, setUser] = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [userRole, setUserRole] = useState(() => sessionStorage.getItem('road_guardian_role') || null);

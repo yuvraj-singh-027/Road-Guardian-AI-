@@ -446,13 +446,13 @@ def update_user_role(user_id: int, role: str):
 
 DEFAULT_USER = {
     "id": 1,
-    "name": "Yuvraj Singh",
-    "email": "yuvrajmksingh20@gmail.com",
-    "role": "admin",
+    "name": "Public Citizen",
+    "email": "citizen@roadguardian.gov",
+    "role": "public",
     "is_verified": 1,
     "phone": "+91-9876543210",
-    "department": "Public Works & Road Safety Authority",
-    "badge_number": "RG-9042",
+    "department": "Public Citizen Services",
+    "badge_number": "RG-CITIZEN",
     "profile_picture": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100"
 }
 
