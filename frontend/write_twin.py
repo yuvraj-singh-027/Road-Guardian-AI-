@@ -1,4 +1,6 @@
-import React, { useEffect, useState, useRef } from 'react';
+import os
+
+code = '''import React, { useEffect, useState, useRef } from 'react';
 import * as maptilersdk from '@maptiler/sdk';
 import "@maptiler/sdk/dist/maptiler-sdk.css";
 import { 
@@ -1288,3 +1290,10 @@ export default function DigitalTwinMapView() {
     </div>
   );
 }
+'''
+
+target_path = os.path.join(os.getcwd(), 'src', 'components', 'DigitalTwinMapView.jsx')
+with open(target_path, 'w', encoding='utf-8') as f:
+    f.write(code)
+
+print("SUCCESS: Wrote", len(code), "chars to", target_path)

@@ -5,8 +5,9 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
   let navItems = [];
   if (userRole === 'public') {
     navItems = [
-      { id: 'detection', label: 'Report Hazard', icon: Camera, badge: 'AI Scanner' },
-      { id: 'my-reports', label: 'Report & Incident', icon: ClipboardList, badge: 'Live Feed' },
+      { id: 'detection', label: 'Report Hazard & Scan', icon: Camera, badge: 'AI Scanner' },
+      { id: 'digital-twin', label: 'Digital Twin & Traffic Simulator', icon: Map, badge: 'SUMO Sim' },
+      { id: 'my-reports', label: 'Reports & Incident History', icon: ClipboardList, badge: 'Live Feed' },
       { id: 'switch-authority', label: 'Authority Portal', icon: ShieldAlert, badge: 'Admin' },
       { id: 'account', label: 'Account', icon: User, badge: 'Profile' },
     ];
@@ -14,6 +15,7 @@ export default function Sidebar({ activeTab, setActiveTab, userRole, onSwitchPor
     navItems = [
       { id: 'digital-twin', label: 'Digital Twin & Traffic Simulator', icon: Map, badge: 'SUMO Sim' },
       { id: 'my-reports', label: 'Reports & Municipal Audit', icon: ClipboardList, badge: 'Unified' },
+      { id: 'detection', label: 'AI Hazard Perception Scanner', icon: Camera, badge: 'Vision' },
       { id: 'risk-calculator', label: 'Risk Engine Evaluator', icon: ShieldAlert, badge: 'Layer 2' },
     ];
   }
