@@ -252,173 +252,7 @@ def get_default_city_network(center_lat: float = 28.6139, center_lon: float = 77
                 "connected_to": ["Macro_Road_B", "Macro_Road_C"]
             }
         ]
-    else:
-        # Micro-street block level (~250m precision)
-        scale = 0.0028
-        raw_segments = [
-            {
-                "id": "Sec1_Blvd_N1",
-                "name": "Sector 1 Main Blvd (North Block 1)",
-                "start": [center_lon - 2.0 * scale, center_lat + 2.0 * scale],
-                "end": [center_lon - 1.0 * scale, center_lat + 2.0 * scale],
-                "base_capacity": 1600, "base_traffic": 1420, "speed_kmh": 45.0,
-                "potholes": 6, "severity": "Critical", "confidence": 0.94,
-                "road_type": "Arterial Road", "weather": "Rainy", "traffic_density": "High",
-                "proximity_school_hospital": False, "connected_to": ["Sec1_Blvd_N2", "Sec2_Ring_W1", "School_Zone_Ave1"]
-            },
-            {
-                "id": "Sec1_Blvd_N2",
-                "name": "Sector 1 Main Blvd (North Block 2)",
-                "start": [center_lon - 1.0 * scale, center_lat + 2.0 * scale],
-                "end": [center_lon, center_lat + 2.0 * scale],
-                "base_capacity": 1600, "base_traffic": 1280, "speed_kmh": 40.0,
-                "potholes": 4, "severity": "High", "confidence": 0.88,
-                "road_type": "Arterial Road", "weather": "Clear", "traffic_density": "High",
-                "proximity_school_hospital": True, "connected_to": ["Sec1_Blvd_N1", "Sec1_Blvd_N3", "Hosp_Approach_1"]
-            },
-            {
-                "id": "Sec1_Blvd_N3",
-                "name": "Sector 1 Main Blvd (North Block 3)",
-                "start": [center_lon, center_lat + 2.0 * scale],
-                "end": [center_lon + 1.5 * scale, center_lat + 2.0 * scale],
-                "base_capacity": 1500, "base_traffic": 980, "speed_kmh": 50.0,
-                "potholes": 2, "severity": "Medium", "confidence": 0.76,
-                "road_type": "Arterial Road", "weather": "Clear", "traffic_density": "Moderate",
-                "proximity_school_hospital": False, "connected_to": ["Sec1_Blvd_N2", "Civic_Center_Dr"]
-            },
-            {
-                "id": "School_Zone_Ave1",
-                "name": "Central School Zone Avenue",
-                "start": [center_lon - 1.0 * scale, center_lat + 2.0 * scale],
-                "end": [center_lon - 1.0 * scale, center_lat + 1.0 * scale],
-                "base_capacity": 1100, "base_traffic": 920, "speed_kmh": 30.0,
-                "potholes": 5, "severity": "High", "confidence": 0.90,
-                "road_type": "Local Road", "weather": "Rainy", "traffic_density": "High",
-                "proximity_school_hospital": True, "connected_to": ["Sec1_Blvd_N1", "Central_Cross_1"]
-            },
-            {
-                "id": "Hosp_Approach_1",
-                "name": "Hospital Emergency Approach Way",
-                "start": [center_lon, center_lat + 2.0 * scale],
-                "end": [center_lon, center_lat + 1.0 * scale],
-                "base_capacity": 1300, "base_traffic": 1150, "speed_kmh": 35.0,
-                "potholes": 7, "severity": "Critical", "confidence": 0.95,
-                "road_type": "Collector Street", "weather": "Clear", "traffic_density": "High",
-                "proximity_school_hospital": True, "connected_to": ["Sec1_Blvd_N2", "Civic_Center_Dr", "Central_Cross_1"]
-            },
-            {
-                "id": "Sec2_Ring_W1",
-                "name": "Sector 2 Outer Ring (West Block 1)",
-                "start": [center_lon - 2.0 * scale, center_lat + 2.0 * scale],
-                "end": [center_lon - 2.0 * scale, center_lat + 1.0 * scale],
-                "base_capacity": 1400, "base_traffic": 780, "speed_kmh": 50.0,
-                "potholes": 1, "severity": "Low", "confidence": 0.60,
-                "road_type": "Collector Street", "weather": "Clear", "traffic_density": "Moderate",
-                "proximity_school_hospital": False, "connected_to": ["Sec1_Blvd_N1", "Sec2_Ring_W2"]
-            },
-            {
-                "id": "Sec2_Ring_W2",
-                "name": "Sector 2 Outer Ring (West Block 2)",
-                "start": [center_lon - 2.0 * scale, center_lat + 1.0 * scale],
-                "end": [center_lon - 2.0 * scale, center_lat],
-                "base_capacity": 1400, "base_traffic": 810, "speed_kmh": 45.0,
-                "potholes": 2, "severity": "Medium", "confidence": 0.72,
-                "road_type": "Collector Street", "weather": "Clear", "traffic_density": "Moderate",
-                "proximity_school_hospital": False, "connected_to": ["Sec2_Ring_W1", "Metro_Station_Way"]
-            },
-            {
-                "id": "Central_Cross_1",
-                "name": "Central Junction Cross Street",
-                "start": [center_lon - 1.0 * scale, center_lat + 1.0 * scale],
-                "end": [center_lon, center_lat + 1.0 * scale],
-                "base_capacity": 1200, "base_traffic": 650, "speed_kmh": 35.0,
-                "potholes": 0, "severity": "Low", "confidence": 0.50,
-                "road_type": "Local Road", "weather": "Clear", "traffic_density": "Low",
-                "proximity_school_hospital": False, "connected_to": ["School_Zone_Ave1", "Hosp_Approach_1", "TechPark_Access_1"]
-            },
-            {
-                "id": "Civic_Center_Dr",
-                "name": "Civic Center Outer Drive",
-                "start": [center_lon, center_lat + 1.0 * scale],
-                "end": [center_lon + 1.5 * scale, center_lat + 1.0 * scale],
-                "base_capacity": 1500, "base_traffic": 1100, "speed_kmh": 40.0,
-                "potholes": 3, "severity": "Medium", "confidence": 0.82,
-                "road_type": "Collector Street", "weather": "Clear", "traffic_density": "High",
-                "proximity_school_hospital": True, "connected_to": ["Hosp_Approach_1", "Commercial_Belt_1"]
-            },
-            {
-                "id": "Metro_Station_Way",
-                "name": "Metro Station Corridor Avenue",
-                "start": [center_lon - 2.0 * scale, center_lat],
-                "end": [center_lon - 1.0 * scale, center_lat],
-                "base_capacity": 1800, "base_traffic": 1450, "speed_kmh": 50.0,
-                "potholes": 5, "severity": "High", "confidence": 0.91,
-                "road_type": "Arterial Road", "weather": "Rainy", "traffic_density": "High",
-                "proximity_school_hospital": False, "connected_to": ["Sec2_Ring_W2", "TechPark_Access_1", "Flyover_Ramp_S1"]
-            },
-            {
-                "id": "TechPark_Access_1",
-                "name": "Tech Park Main Access Way",
-                "start": [center_lon - 1.0 * scale, center_lat],
-                "end": [center_lon, center_lat],
-                "base_capacity": 1700, "base_traffic": 1320, "speed_kmh": 45.0,
-                "potholes": 2, "severity": "Medium", "confidence": 0.75,
-                "road_type": "Arterial Road", "weather": "Clear", "traffic_density": "High",
-                "proximity_school_hospital": False, "connected_to": ["Metro_Station_Way", "Commercial_Belt_1", "Central_Cross_1"]
-            },
-            {
-                "id": "Commercial_Belt_1",
-                "name": "Commercial Market Beltway",
-                "start": [center_lon, center_lat],
-                "end": [center_lon + 1.5 * scale, center_lat],
-                "base_capacity": 1600, "base_traffic": 1250, "speed_kmh": 35.0,
-                "potholes": 4, "severity": "High", "confidence": 0.87,
-                "road_type": "Collector Street", "weather": "Clear", "traffic_density": "High",
-                "proximity_school_hospital": False, "connected_to": ["TechPark_Access_1", "Civic_Center_Dr", "Residential_Ln3"]
-            },
-            {
-                "id": "Flyover_Ramp_S1",
-                "name": "Southern Flyover Ramp Connector",
-                "start": [center_lon - 1.0 * scale, center_lat],
-                "end": [center_lon - 1.0 * scale, center_lat - 1.0 * scale],
-                "base_capacity": 2000, "base_traffic": 1600, "speed_kmh": 60.0,
-                "potholes": 1, "severity": "Low", "confidence": 0.65,
-                "road_type": "Expressway", "weather": "Clear", "traffic_density": "High",
-                "proximity_school_hospital": False, "connected_to": ["Metro_Station_Way", "South_Expressway_1"]
-            },
-            {
-                "id": "Residential_Ln3",
-                "name": "Residential Sector Street Lane 3",
-                "start": [center_lon, center_lat],
-                "end": [center_lon, center_lat - 1.0 * scale],
-                "base_capacity": 900, "base_traffic": 420, "speed_kmh": 25.0,
-                "potholes": 0, "severity": "Low", "confidence": 0.40,
-                "road_type": "Local Road", "weather": "Clear", "traffic_density": "Low",
-                "proximity_school_hospital": False, "connected_to": ["Commercial_Belt_1", "South_Expressway_1"]
-            },
-            {
-                "id": "Industrial_Byp_1",
-                "name": "Industrial Estate Bypass Road",
-                "start": [center_lon - 2.0 * scale, center_lat - 1.0 * scale],
-                "end": [center_lon - 1.0 * scale, center_lat - 1.0 * scale],
-                "base_capacity": 2200, "base_traffic": 1500, "speed_kmh": 70.0,
-                "potholes": 3, "severity": "Medium", "confidence": 0.80,
-                "road_type": "Expressway", "weather": "Clear", "traffic_density": "Moderate",
-                "proximity_school_hospital": False, "connected_to": ["Flyover_Ramp_S1", "South_Expressway_1"]
-            },
-            {
-                "id": "South_Expressway_1",
-                "name": "Southern Expressway Link",
-                "start": [center_lon - 1.0 * scale, center_lat - 1.0 * scale],
-                "end": [center_lon + 1.5 * scale, center_lat - 1.0 * scale],
-                "base_capacity": 2800, "base_traffic": 1950, "speed_kmh": 80.0,
-                "potholes": 2, "severity": "Low", "confidence": 0.70,
-                "road_type": "Expressway", "weather": "Clear", "traffic_density": "Moderate",
-                "proximity_school_hospital": False, "connected_to": ["Industrial_Byp_1", "Flyover_Ramp_S1", "Residential_Ln3"]
-            }
-        ]
-
-    # Dynamic database matching logic
+    # Dynamic database-driven network generation
     try:
         try:
             from .db_manager import get_all_detections
@@ -428,53 +262,148 @@ def get_default_city_network(center_lat: float = 28.6139, center_lon: float = 77
     except Exception:
         df = None
 
+
     if df is not None and not df.empty:
-        # Extract unique landmark names reported in database
-        reported_landmarks = []
+        # Group detections by reported landmark
+        landmark_groups = {}
         for _, row in df.iterrows():
-            lm = str(row.get("landmark_name") or row.get("Landmark") or row.get("description") or "").strip()
-            if lm and lm.lower() not in ["none", "nan", "null", "unknown", ""]:
-                if lm not in reported_landmarks:
-                    reported_landmarks.append(lm)
-
-        # Match or dynamically map reported landmarks into network segments
-        for idx, s in enumerate(raw_segments):
-            potholes_count = 0
-            max_severity = "Low"
-            max_conf = 0.0
+            lm = str(row.get("landmark_name") or row.get("Landmark") or row.get("description") or "Municipal Main Arterial").strip()
+            if not lm or lm.lower() in ["none", "nan", "null", "unknown", ""]:
+                lm = "Municipal Main Arterial"
             
-            # If segment can adopt a real reported landmark
-            if idx < len(reported_landmarks) and "Sector" in s["name"]:
-                s["name"] = f"{reported_landmarks[idx]} Corridor"
-
-            for _, row in df.iterrows():
-                lm = str(row.get("landmark_name") or row.get("Landmark") or row.get("description") or "").lower()
-                if lm and (lm in s["name"].lower() or s["name"].lower() in lm):
-                    potholes_count += 1
-                    row_sev = str(row.get("Severity", "Low"))
-                    severity_ranks = {"Low": 1, "Medium": 2, "High": 3, "Critical": 4}
-                    if severity_ranks.get(row_sev, 1) > severity_ranks.get(max_severity, 1):
-                        max_severity = row_sev
-                    try:
-                        conf_val = float(row.get("Confidence", 0.0))
-                    except Exception:
-                        conf_val = 0.85
-                    max_conf = max(max_conf, conf_val)
+            if lm not in landmark_groups:
+                landmark_groups[lm] = {
+                    "count": 0,
+                    "max_severity": "Low",
+                    "max_conf": 0.0,
+                    "lat": float(row.get("lat_numeric") or row.get("Latitude") or center_lat),
+                    "lon": float(row.get("lon_numeric") or row.get("Longitude") or center_lon),
+                    "damage_type": str(row.get("damage_type") or "Pothole")
+                }
             
-            # If no direct match found, ensure realistic base counts
-            if potholes_count > 0:
-                s["potholes"] = potholes_count
-                s["severity"] = max_severity
-                s["confidence"] = max_conf
-            else:
-                s["potholes"] = max(1, (idx * 2 + 1) % 5)
-                s["severity"] = ["Low", "Medium", "High", "Critical"][idx % 4]
-                s["confidence"] = round(0.72 + (idx % 20) * 0.01, 2)
+            group = landmark_groups[lm]
+            group["count"] += 1
+            row_sev = str(row.get("Severity", "Low"))
+            severity_ranks = {"Low": 1, "Medium": 2, "High": 3, "Critical": 4}
+            if severity_ranks.get(row_sev, 1) > severity_ranks.get(group["max_severity"], 1):
+                group["max_severity"] = row_sev
+            try:
+                conf_val = float(row.get("Confidence", 0.85))
+            except Exception:
+                conf_val = 0.85
+            group["max_conf"] = max(group["max_conf"], conf_val)
+
+        # Build dynamic road corridors directly from database records
+        dynamic_segments = []
+        seg_idx = 1
+        scale = 0.003
+
+        for lm, g in landmark_groups.items():
+            seg_id = f"DB_Road_{seg_idx}"
+            seg_lat = g["lat"] if g["lat"] != 0 else center_lat
+            seg_lon = g["lon"] if g["lon"] != 0 else center_lon
+
+            cap = 1800 if g["max_severity"] in ["Critical", "High"] else 1500
+            traffic_vol = int(cap * 0.75)
+
+            dynamic_segments.append({
+                "id": seg_id,
+                "name": f"{lm} Corridor",
+                "start": [seg_lon - scale, seg_lat + scale],
+                "end": [seg_lon + scale, seg_lat + scale],
+                "base_capacity": cap,
+                "base_traffic": traffic_vol,
+                "speed_kmh": 50.0,
+                "potholes": g["count"],
+                "severity": g["max_severity"],
+                "confidence": round(g["max_conf"], 2),
+                "road_type": "Arterial Road",
+                "weather": "Clear",
+                "traffic_density": "High" if g["max_severity"] in ["Critical", "High"] else "Moderate",
+                "proximity_school_hospital": (g["max_severity"] == "Critical"),
+                "connected_to": []
+            })
+            seg_idx += 1
+
+        # Add 2-3 standard municipal bypass connectors for realistic rerouting
+        bypass_connectors = [
+            {
+                "id": "Bypass_Ring_Corridor",
+                "name": "Central Ring Bypass Route",
+                "start": [center_lon - 2.0 * scale, center_lat],
+                "end": [center_lon + 2.0 * scale, center_lat],
+                "base_capacity": 2400,
+                "base_traffic": 1400,
+                "speed_kmh": 65.0,
+                "potholes": 0,
+                "severity": "Low",
+                "confidence": 0.0,
+                "road_type": "Expressway",
+                "weather": "Clear",
+                "traffic_density": "Moderate",
+                "proximity_school_hospital": False,
+                "connected_to": [s["id"] for s in dynamic_segments]
+            },
+            {
+                "id": "Outer_Transit_Loop",
+                "name": "Outer Transit Commercial Loop",
+                "start": [center_lon - scale, center_lat - scale],
+                "end": [center_lon + scale, center_lat - scale],
+                "base_capacity": 1600,
+                "base_traffic": 950,
+                "speed_kmh": 45.0,
+                "potholes": 0,
+                "severity": "Low",
+                "confidence": 0.0,
+                "road_type": "Collector Street",
+                "weather": "Clear",
+                "traffic_density": "Low",
+                "proximity_school_hospital": False,
+                "connected_to": [s["id"] for s in dynamic_segments]
+            }
+        ]
+
+        for s in dynamic_segments:
+            s["connected_to"] = [b["id"] for b in bypass_connectors]
+
+        raw_segments = dynamic_segments + bypass_connectors
+
     else:
-        for idx, s in enumerate(raw_segments):
-            s["potholes"] = max(1, (idx * 2 + 1) % 5)
-            s["severity"] = ["Low", "Medium", "High", "Critical"][idx % 4]
-            s["confidence"] = round(0.75 + (idx % 20) * 0.01, 2)
+        # DB IS EMPTY: Show clean baseline network with 0 potholes
+        scale = 0.003
+        raw_segments = [
+            {
+                "id": "Baseline_Arterial_North",
+                "name": "North City Arterial Corridor",
+                "start": [center_lon - scale, center_lat + scale],
+                "end": [center_lon + scale, center_lat + scale],
+                "base_capacity": 1800, "base_traffic": 1200, "speed_kmh": 50.0,
+                "potholes": 0, "severity": "Low", "confidence": 0.0,
+                "road_type": "Arterial Road", "weather": "Clear", "traffic_density": "Moderate",
+                "proximity_school_hospital": False, "connected_to": ["Baseline_Ring_Central", "Baseline_Expressway_South"]
+            },
+            {
+                "id": "Baseline_Ring_Central",
+                "name": "Central Ring Road Avenue",
+                "start": [center_lon - scale, center_lat],
+                "end": [center_lon + scale, center_lat],
+                "base_capacity": 2200, "base_traffic": 1500, "speed_kmh": 60.0,
+                "potholes": 0, "severity": "Low", "confidence": 0.0,
+                "road_type": "Arterial Road", "weather": "Clear", "traffic_density": "Moderate",
+                "proximity_school_hospital": False, "connected_to": ["Baseline_Arterial_North", "Baseline_Expressway_South"]
+            },
+            {
+                "id": "Baseline_Expressway_South",
+                "name": "South City Expressway Link",
+                "start": [center_lon - scale, center_lat - scale],
+                "end": [center_lon + scale, center_lat - scale],
+                "base_capacity": 2800, "base_traffic": 1800, "speed_kmh": 80.0,
+                "potholes": 0, "severity": "Low", "confidence": 0.0,
+                "road_type": "Expressway", "weather": "Clear", "traffic_density": "Moderate",
+                "proximity_school_hospital": False, "connected_to": ["Baseline_Arterial_North", "Baseline_Ring_Central"]
+            }
+        ]
+
 
 
     processed_network = []
