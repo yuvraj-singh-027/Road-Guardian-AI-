@@ -225,9 +225,13 @@ class RiskCalculationRequest(BaseModel):
     proximity_school_hospital: bool = Field(default=False)
 
 class TrafficRerouteRequest(BaseModel):
-    closed_road_id: str = Field(default="Road_A")
-    center_lat: float = Field(default=28.6139)
-    center_lon: float = Field(default=77.2090)
+    closed_road_id: str = Field(default="Sec1_Blvd_N1")
+    closure_type: Optional[str] = Field(default="full", description="full, single_lane")
+    traffic_window: Optional[str] = Field(default="peak", description="peak, normal, off_peak")
+    duration_hours: Optional[int] = Field(default=4, ge=1, le=24)
+    center_lat: Optional[float] = Field(default=28.6139)
+    center_lon: Optional[float] = Field(default=77.2090)
+
 
 class PDFReportRequest(BaseModel):
     target_department: Optional[str] = Field(default="Municipal Public Works Department (PWD)")
@@ -1162,8 +1166,14 @@ def get_traffic_network_endpoint(center_lat: float = 28.6139, center_lon: float 
 
 @app.post("/api/traffic/reroute")
 def trigger_traffic_reroute(req: TrafficRerouteRequest, current_user: Optional[dict] = Depends(get_current_user_optional)):
-    network = get_default_city_network(center_lat=req.center_lat, center_lon=req.center_lon)
-    raw_sim = simulate_traffic_rerouting(network, req.closed_road_id)
+    network = get_default_city_network(center_lat=req.center_lat or 28.6139, center_lon=req.center_lon or 77.2090)
+    raw_sim = simulate_traffic_rerouting(
+        network=network, 
+        closed_road_id=req.closed_road_id,
+        closure_type=req.closure_type or "full",
+        traffic_window=req.traffic_window or "peak",
+        duration_hours=req.duration_hours or 4
+    )
     if "error" in raw_sim:
         raise HTTPException(status_code=404, detail=raw_sim["error"])
 
@@ -1177,17 +1187,20 @@ def trigger_traffic_reroute(req: TrafficRerouteRequest, current_user: Optional[d
 
     # Build updated network with dynamic simulated volumes
     updated_network = []
+    is_full = (req.closure_type or "full").lower() == "full"
     for seg in network:
         seg_copy = dict(seg)
         if seg["id"] == req.closed_road_id:
-            seg_copy["simulated_traffic"] = 0
+            seg_copy["simulated_traffic"] = 0 if is_full else int(seg.get("base_traffic", 1000) * 0.5)
             seg_copy["is_closed"] = True
+            seg_copy["closure_type"] = req.closure_type or "full"
         else:
             match = next((r for r in rerouting_data if r["id"] == seg["id"]), None)
             if match:
                 seg_copy["simulated_traffic"] = match["new_traffic"]
                 seg_copy["pct_increase"] = match["pct_increase"]
                 seg_copy["new_vc_ratio"] = match["new_vc_ratio"]
+                seg_copy["congestion_level"] = match.get("congestion_level", "Moderate")
             else:
                 seg_copy["simulated_traffic"] = seg["base_traffic"]
         updated_network.append(seg_copy)
@@ -1195,10 +1208,16 @@ def trigger_traffic_reroute(req: TrafficRerouteRequest, current_user: Optional[d
     return {
         "closed_road_id": req.closed_road_id,
         "closed_road_name": closed_seg.get("name", req.closed_road_id),
+        "closure_type": raw_sim.get("closure_type", req.closure_type or "full"),
+        "traffic_window": raw_sim.get("traffic_window", req.traffic_window or "peak"),
+        "duration_hours": raw_sim.get("duration_hours", req.duration_hours or 4),
         "displaced_traffic": raw_sim.get("diverted_volume", closed_seg.get("base_traffic", 1500)),
+        "delay_hours": raw_sim.get("delay_hours", 0.0),
+        "co2_surge_kg": raw_sim.get("co2_surge_kg", 0.0),
         "overloaded_count": overloaded_count,
         "congestion_index": congestion_index,
         "prediction_text": raw_sim.get("prediction_text", ""),
+        "top_detours": raw_sim.get("top_detours", []),
         "mitigation_steps": raw_sim.get("mitigation_steps", []),
         "rerouting_data": rerouting_data,
         "updated_network": updated_network
