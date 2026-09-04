@@ -266,7 +266,7 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
       const baseUrl = import.meta.env.VITE_API_URL || 
         (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
           ? 'http://localhost:8000' 
-          : 'https://road-guardian-ai-5.onrender.com');
+          : window.location.origin);
       // Direct redirect to backend endpoint
       window.location.href = `${baseUrl}/api/auth/google/login`;
     } catch (err) {
@@ -297,7 +297,7 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
           const baseUrl = import.meta.env.VITE_API_URL || 
             (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
               ? 'http://localhost:8000' 
-              : 'https://road-guardian-ai-5.onrender.com');
+              : window.location.origin);
           // Direct browser navigation to start the OAuth redirect safely
           window.location.href = `${baseUrl}/api/auth/google/login`;
           return;
