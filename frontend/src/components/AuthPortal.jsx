@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Mail, Lock, User, ArrowRight, ShieldCheck, AlertCircle, Loader, KeyRound, CheckCircle2, ChevronLeft, Zap } from 'lucide-react';
+import { Activity, Mail, Lock, User, ArrowRight, ShieldCheck, AlertCircle, Loader, KeyRound, CheckCircle2, ChevronLeft, Zap, X } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 
-export default function AuthPortal({ onAuthSuccess, initialAction, initialToken }) {
+export default function AuthPortal({ onAuthSuccess, onClose, initialAction, initialToken }) {
   const [view, setView] = useState('login'); // login | signup | forgot | reset | verify
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -63,7 +63,7 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
     }
   };
 
-  // 2. Local Login Action
+  // 2. Supabase & Local Login Action
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     if (!email.trim() || !password) {
@@ -76,6 +76,29 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
     setSuccessMsg('');
 
     try {
+      // 1. Authenticate with Supabase Auth if configured
+      if (isSupabaseConfigured && supabase) {
+        const { data: supaData, error: supaError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+
+        if (!supaError && supaData?.session) {
+          const supaUser = {
+            id: supaData.user.id,
+            name: supaData.user.user_metadata?.name || supaData.user.user_metadata?.full_name || email.split('@')[0],
+            email: supaData.user.email,
+            role: supaData.user.user_metadata?.role || 'public',
+            token: supaData.session.access_token,
+          };
+          localStorage.setItem('road_guardian_token', supaData.session.access_token);
+          sessionStorage.setItem('road_guardian_role', supaUser.role);
+          onAuthSuccess(supaUser);
+          return;
+        }
+      }
+
+      // 2. Fallback to direct backend authentication
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -85,13 +108,11 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
       const data = await res.json();
 
       if (res.ok) {
-        // Save token to localStorage
         localStorage.setItem('road_guardian_token', data.token);
         sessionStorage.setItem('road_guardian_role', data.user.role);
         onAuthSuccess(data.user);
       } else {
         if (data.detail === "EMAIL_UNVERIFIED") {
-          // Keep email field for resending
           setView('unverified-notice');
           setEmail(email.trim());
         } else {
@@ -105,7 +126,7 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
     }
   };
 
-  // 3. Register Account Submit
+  // 3. Supabase & Local Register Account Submit
   const handleSignUpSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -133,7 +154,31 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
     setErrorMsg('');
     setSuccessMsg('');
 
+    const targetRole = showAdminField && adminPasscode.trim() === 'Admin@RoadGuardian2026' ? 'admin' : 'public';
+
     try {
+      // 1. Register with Supabase Auth if configured
+      if (isSupabaseConfigured && supabase) {
+        const { data: supaData, error: supaError } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: {
+              name: name.trim(),
+              full_name: name.trim(),
+              role: targetRole,
+            },
+          },
+        });
+
+        if (!supaError && supaData?.user) {
+          setSuccessMsg('Account created successfully in Supabase! Check your inbox for confirmation.');
+          setView('verify-alert');
+          return;
+        }
+      }
+
+      // 2. Fallback to direct backend registration
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -260,7 +305,15 @@ export default function AuthPortal({ onAuthSuccess, initialAction, initialToken 
 
   return (
     <div className="portal-overlay">
-      <div className="portal-container" style={{ maxWidth: '460px' }}>
+      <div className="portal-container" style={{ maxWidth: '460px', position: 'relative' }}>
+        {onClose && (
+          <button 
+            onClick={onClose}
+            style={{ position: 'absolute', right: '12px', top: '12px', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a1a1aa', cursor: 'pointer', zIndex: 10 }}
+          >
+            <X size={16} />
+          </button>
+        )}
 
         {/* Brand Header */}
         <div className="portal-header" style={{ marginBottom: '28px' }}>

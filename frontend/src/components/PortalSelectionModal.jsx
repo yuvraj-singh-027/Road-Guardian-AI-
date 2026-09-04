@@ -1,41 +1,49 @@
 import React from 'react';
-import { ShieldAlert, Users, ArrowRight, Activity, CheckCircle2, User as UserIcon } from 'lucide-react';
+import { ShieldAlert, Users, ArrowRight, Activity, CheckCircle2, User as UserIcon, LogIn } from 'lucide-react';
 
-export default function PortalSelectionModal({ user, onSelectRole }) {
+export default function PortalSelectionModal({ user, onSelectRole, onOpenAuth }) {
   return (
     <div className="portal-overlay">
       <div className="portal-container">
         {/* User Account Info */}
-        {user && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            background: 'rgba(24, 24, 27, 0.65)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            borderRadius: '12px',
-            padding: '10px 16px',
-            marginBottom: '24px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: 'rgba(0, 230, 180, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <UserIcon size={16} color="#00E6B4" />
-              </div>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>{user.name || 'Active Operator'}</div>
-                <div style={{ fontSize: '0.72rem', color: '#a1a1aa' }}>{user.email || 'yuvrajmksingh20@gmail.com'}</div>
-              </div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'rgba(24, 24, 27, 0.65)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: '12px',
+          padding: '10px 16px',
+          marginBottom: '24px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              background: 'rgba(0, 230, 180, 0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <UserIcon size={16} color="#00E6B4" />
+            </div>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>{user?.name || 'Active Operator'}</div>
+              <div style={{ fontSize: '0.72rem', color: '#a1a1aa' }}>{user?.email || 'yuvrajmksingh20@gmail.com'}</div>
             </div>
           </div>
-        )}
+
+          {onOpenAuth && (
+            <button
+              onClick={onOpenAuth}
+              className="btn-secondary"
+              style={{ fontSize: '0.75rem', padding: '6px 12px', gap: '6px' }}
+            >
+              <LogIn size={13} color="#00E6B4" /> Sign In / Register (Supabase)
+            </button>
+          )}
+        </div>
 
         {/* Header Branding */}
         <div className="portal-header">

@@ -12,7 +12,9 @@ import PublicFeedHistoryView from './components/PublicFeedHistoryView';
 import N8nAutomationView from './components/N8nAutomationView';
 import PublicNavbar from './components/PublicNavbar';
 import UserProfileModal from './components/UserProfileModal';
+import AuthPortal from './components/AuthPortal';
 import CitizenGuideWidget from './components/CitizenGuideWidget';
+import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { Camera, Map, ShieldAlert, Cpu, FileText, Activity, Lock, KeyRound, ArrowUpRight, ArrowDownRight, Loader } from 'lucide-react';
 
 // --- GLOBAL FETCH TOKEN INTERCEPTOR ---
@@ -31,7 +33,7 @@ if (typeof window !== 'undefined' && !window.__fetch_intercepted__) {
     const response = await originalFetch(url, options);
     
     // Handle session expiration (401)
-    if (response.status === 401 && !url.includes('/api/auth/login') && !url.includes('/api/auth/signup') && !url.includes('/api/auth/google/mock-login')) {
+    if (response.status === 401 && !url.includes('/api/auth/login') && !url.includes('/api/auth/signup')) {
       localStorage.removeItem('road_guardian_token');
       sessionStorage.removeItem('road_guardian_role');
       window.dispatchEvent(new Event('auth-unauthorized'));
@@ -50,11 +52,43 @@ export default function App() {
     department: 'Public Works & Road Safety Authority'
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [userRole, setUserRole] = useState(() => sessionStorage.getItem('road_guardian_role') || null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState('detection');
   const [summaryStats, setSummaryStats] = useState(null);
+
+  // Sync Supabase Auth session
+  useEffect(() => {
+    if (isSupabaseConfigured && supabase) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          setUser({
+            id: session.user.id,
+            name: session.user.user_metadata?.name || session.user.user_metadata?.full_name || session.user.email.split('@')[0],
+            email: session.user.email,
+            role: session.user.user_metadata?.role || 'public',
+          });
+          localStorage.setItem('road_guardian_token', session.access_token);
+        }
+      });
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) {
+          setUser({
+            id: session.user.id,
+            name: session.user.user_metadata?.name || session.user.user_metadata?.full_name || session.user.email.split('@')[0],
+            email: session.user.email,
+            role: session.user.user_metadata?.role || 'public',
+          });
+          localStorage.setItem('road_guardian_token', session.access_token);
+        }
+      });
+
+      return () => subscription?.unsubscribe();
+    }
+  }, []);
 
   // Fetch summary stats
   useEffect(() => {
@@ -75,7 +109,11 @@ export default function App() {
     setUserRole(null); // Triggers PortalSelectionModal
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (isSupabaseConfigured && supabase) {
+      await supabase.auth.signOut().catch(() => null);
+    }
+    localStorage.removeItem('road_guardian_token');
     sessionStorage.removeItem('road_guardian_role');
     setUserRole(null);
     setShowProfileModal(false);
@@ -147,10 +185,23 @@ export default function App() {
   // If portal role is not selected yet, render PortalSelectionModal
   if (userRole === null) {
     return (
-      <PortalSelectionModal 
-        user={user}
-        onSelectRole={handleSelectRole}
-      />
+      <>
+        <PortalSelectionModal 
+          user={user}
+          onSelectRole={handleSelectRole}
+          onOpenAuth={() => setShowAuthModal(true)}
+        />
+        {showAuthModal && (
+          <AuthPortal
+            onAuthSuccess={(loggedInUser) => {
+              setUser(loggedInUser);
+              setShowAuthModal(false);
+              handleSelectRole(loggedInUser.role || 'public');
+            }}
+            onClose={() => setShowAuthModal(false)}
+          />
+        )}
+      </>
     );
   }
 
@@ -210,6 +261,16 @@ export default function App() {
               setUser(updatedUser);
               setUserRole(updatedUser.role);
             }}
+          />
+        )}
+
+        {showAuthModal && (
+          <AuthPortal
+            onAuthSuccess={(loggedInUser) => {
+              setUser(loggedInUser);
+              setShowAuthModal(false);
+            }}
+            onClose={() => setShowAuthModal(false)}
           />
         )}
 
@@ -329,6 +390,16 @@ export default function App() {
             setUser(updatedUser);
             setUserRole(updatedUser.role);
           }}
+        />
+      )}
+
+      {showAuthModal && (
+        <AuthPortal
+          onAuthSuccess={(loggedInUser) => {
+            setUser(loggedInUser);
+            setShowAuthModal(false);
+          }}
+          onClose={() => setShowAuthModal(false)}
         />
       )}
 
